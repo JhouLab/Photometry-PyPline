@@ -8,13 +8,30 @@ import matplotlib.pyplot as plt
 root = tkinter.Tk()
 root.withdraw()
 
+def normalize(df):
+    #take first and last 20 samples, calculate x-intercept of line passing between the points
+    end = len(df._465)
+    y1 = df._465[0:20].mean()
+    y2 = df._465[end-20:end].mean()
+    x1 = df._405[0:20].mean()
+    x2 = df._405[end-20:end].mean()
+
+    intercept = x2 - (y2 * (x1-x2))/(y1-y2)
+    print("X-intercept of regression: ", intercept)
+    if intercept > max(y1, y2)*0.8:
+        print("Warning: X-intercept is greater than actual x values, assuming intercept is 0")
+        intercept = 0
+
+    df["norm"] = df._465 / (df._405 - intercept)
+    print(df)
+    return df
+
 def readData(fpath):
     rawData = None
     try:
         rawData = pd.read_excel(fpath, sheet_name=0, header=1, dtype=float)
     except:
         print("Error: Could not read photometry data")
-    print(rawData)
     return rawData
 
 
@@ -65,6 +82,14 @@ def main():
     rawData.plot(x="Time(s)", y=["_465", "_405"], kind="line", figsize=(10,5))
     plt.title("Raw Data")
     plt.ylabel("Current")
+
+    #normalize data
+    normData = normalize(rawData)
+
+    #graph normalized data
+    normData.plot(x="Time(s)", y=["norm"], kind="line", figsize=(10,5))
+    plt.title("Normalized 465")
+    plt.ylabel("f/f")
     plt.show()
 
 main()
