@@ -7,7 +7,7 @@ class PhotometryData:
         self.mpcDf = mpcDf
         self.binnedPtDf = None
         self.autoFlProfile = autoFlprofile
-        #threshold value below which we remove 465 values
+        #threshold value which we remove 465 values under (these are samples which the laser was not active for)
         self.cutoff = cutoff
         self.id_sessionStart = id_sessionStart
         self.id_sessionEnd = id_sessionEnd
@@ -16,10 +16,18 @@ class PhotometryData:
         tmp = self.mpcDf[self.mpcDf.ID == timestampID].secs
         return tmp.values
 
+
+    def binData(self):
+        self.photometryDf["startIdx"] = self.photometryDf["Time"].diff() > 1
+        idxs = self.photometryDf[self.photometryDf.startIdx]
+        print(idxs)
+        self.binnedPtDf = pd.DataFrame(columns=["Time", "_405", "_465", "norm"])
+        for i in range(len(idxs - 1)):
+            
+
     def clean(self):
         mapping = {"Time(s)": "Time", "AIn-1 - Dem (AOut-1)": "_405", "AIn-1 - Dem (AOut-2)": "_465", "DI/O-3": "TTL_6", "DI/O-4": "TTL_8"}
         self.photometryDf.rename(columns = mapping, inplace = True)
-        #remove samples before and after
         #remove samples which are outside recording windows
         self.photometryDf = self.photometryDf.drop(self.photometryDf[self.photometryDf.TTL_6 < 1].index)
         #remove samples in which isosbestic values are close to 0
@@ -80,4 +88,3 @@ class PhotometryData:
 
         self.photometryDf = rawData
         self.mpcDf = timestampData
-

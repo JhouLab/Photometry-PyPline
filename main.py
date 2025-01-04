@@ -65,4 +65,6 @@ def main():
     plt.ylabel("f/f")
     plt.show()
 
+    channel1.binData()
+
 main()
