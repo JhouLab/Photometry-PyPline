@@ -17,13 +17,29 @@ class PhotometryData:
         return tmp.values
 
 
+    #assumes clean() has already been ran on data
     def binData(self):
-        self.photometryDf["startIdx"] = self.photometryDf["Time"].diff() > 1
-        idxs = self.photometryDf[self.photometryDf.startIdx]
-        print(idxs)
+        self.photometryDf["StartIdx"] = self.photometryDf["Time"].diff() > 1
+        idxs = self.photometryDf[self.photometryDf.StartIdx]
+        idxs = idxs.index
+        idxs = idxs.values
         self.binnedPtDf = pd.DataFrame(columns=["Time", "_405", "_465", "norm"])
-        for i in range(len(idxs - 1)):
-            
+        for i in range(1, len(idxs)):
+            end = None
+            start = None
+            if i == len(idxs):
+                end = self.photometryDf.iloc[-1].index
+            else:
+                end = idxs[i+1]
+            start = idxs[1]
+
+            bin465 = self.photometryDf._465[start:end].mean()
+            bin405 = self.photometryDf._405[start:end].mean()
+            binNorm = self.photometryDf.norm[start:end].mean()
+            binTime = self.photometryDf.Time[end]
+
+            self.binnedPtDf.loc[i] = [binTime, bin405, bin465, binNorm]
+        print(self.binnedPtDf)
 
     def clean(self):
         mapping = {"Time(s)": "Time", "AIn-1 - Dem (AOut-1)": "_405", "AIn-1 - Dem (AOut-2)": "_465", "DI/O-3": "TTL_6", "DI/O-4": "TTL_8"}
