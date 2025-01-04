@@ -10,6 +10,7 @@ root.withdraw()
 
 #dictionary of events in Med-Pc timestamp data
 eventDict = {"id_sessionStart": 1,
+             "id_sessionEnd": 2,
              "id_recordingStart": 5,
              "id_recordingStop": 6}
 
@@ -34,7 +35,7 @@ def main():
     #get path to .xlsx file
     fpath = getFile()
     #instantiate data structure
-    channel1 = PhotometryStruct.PhotometryData()
+    channel1 = PhotometryStruct.PhotometryData(id_sessionStart = 1, id_sessionEnd = 2)
     channel1.readData(fpath)
     channel1.clean()
     print("Select a paradigm to analyze (default = 1):")
@@ -51,7 +52,7 @@ def main():
             print("Incorrect input")
 
     #graph raw data
-    channel1.photometryDf.plot(x="Time(s)", y=["_465", "_405"], kind="line", figsize=(10,5))
+    channel1.photometryDf.plot(x="Time", y=["_465", "_405"], kind="line", figsize=(10,5))
     plt.title("Raw Data")
     plt.ylabel("Current")
 
@@ -59,7 +60,7 @@ def main():
     channel1.normalize()
 
     #graph normalized data
-    channel1.photometryDf.plot(x="Time(s)", y=["norm"], kind="line", figsize=(10,5))
+    channel1.photometryDf.plot(x="Time", y=["norm"], kind="line", figsize=(10,5))
     plt.title("Normalized 465")
     plt.ylabel("f/f")
     plt.show()

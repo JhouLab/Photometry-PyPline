@@ -2,20 +2,44 @@ import pandas as pd
 import openpyxl
 
 class PhotometryData:
-    def __init__(self, eventList = None, ptDf = None, mpcDf = None, autoFlprofile = 0, cutoff = 0.009):
+    def __init__(self, ptDf = None, mpcDf = None, autoFlprofile = 0, cutoff = 0.009, id_sessionStart = 1, id_sessionEnd = 2):
         self.photometryDf = ptDf
         self.mpcDf = mpcDf
         self.binnedPtDf = None
         self.autoFlProfile = autoFlprofile
+        #threshold value below which we remove 465 values
         self.cutoff = cutoff
+        self.id_sessionStart = id_sessionStart
+        self.id_sessionEnd = id_sessionEnd
+
+    def getTimestampTimes(self, timestampID):
+        tmp = self.mpcDf[self.mpcDf.ID == timestampID].secs
+        return tmp.values
 
     def clean(self):
-        mapping = {"AIn-1 - Dem (AOut-1)": "_405", "AIn-1 - Dem (AOut-2)": "_465", "DI/O-3": "TTL_6", "DI/O-4": "TTL_8"}
-        self.photometryDf.rename(columns=mapping, inplace=True)
-        # remove values which are outside recording windows
+        mapping = {"Time(s)": "Time", "AIn-1 - Dem (AOut-1)": "_405", "AIn-1 - Dem (AOut-2)": "_465", "DI/O-3": "TTL_6", "DI/O-4": "TTL_8"}
+        self.photometryDf.rename(columns = mapping, inplace = True)
+        #remove samples before and after
+        #remove samples which are outside recording windows
         self.photometryDf = self.photometryDf.drop(self.photometryDf[self.photometryDf.TTL_6 < 1].index)
-        # remove values in which isospestic values are close to 0
-        rawData = self.photometryDf.drop(self.photometryDf[self.photometryDf._465 < self.cutoff].index)
+        #remove samples in which isosbestic values are close to 0
+        self.photometryDf = self.photometryDf.drop(self.photometryDf[self.photometryDf._465 < self.cutoff].index)
+
+        #remove samples which are before or after session start and end times
+        start = self.getTimestampTimes(self.id_sessionStart)
+        end = self.getTimestampTimes(self.id_sessionEnd)
+        if len(start) == 1:
+            start = start[0]
+        else:
+            print("Error: Found more than one session start timestamps in Med-Pc data. Check your Med-Pc file and/or given ID")
+
+        if len(end) == 1:
+            end = end[0]
+        else:
+            print("Error: Found more than one session end timestamps in Med-Pc data. Check your Med-Pc file and/or given ID")
+        self.photometryDf = self.photometryDf.drop(self.photometryDf[self.photometryDf.Time < start].index)
+        self.photometryDf = self.photometryDf.drop(self.photometryDf[self.photometryDf.Time > end].index)
+
 
     def normalize(self):
         #take first and last 20 samples, calculate x-intercept of line passing between the points
@@ -27,7 +51,7 @@ class PhotometryData:
 
         intercept = x2 - (y2 * (x1-x2))/(y1-y2)
         print("X-intercept of regression: ", intercept)
-        if intercept > max(y1, y2)*0.8:
+        if intercept > max(y1, y2) * 0.8:
             print("Warning: X-intercept is greater than actual x values, assuming intercept is 0")
             intercept = 0
         #add contribution of autofluorescence
@@ -47,11 +71,11 @@ class PhotometryData:
         except:
             print("Error: Could not read photometry data")
             return
-
+        #look for Med-Pc Data
         try:
             timestampData = pd.read_excel(fpath, sheet_name="Med-Pc", header = 0)
         except:
-            print("Error: Could not find Med-Pc data in spreadhsheet. Is it labeled 'Med-Pc'?")
+            print("Error: Could not find Med-Pc data in file. Is it labeled 'Med-Pc'?")
             return
 
         self.photometryDf = rawData
