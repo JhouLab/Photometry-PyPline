@@ -51,20 +51,22 @@ def main():
         else:
             print("Incorrect input")
 
-    #graph raw data
-    channel1.photometryDf.plot(x="Time", y=["_465", "_405"], kind="line", figsize=(10,5))
-    plt.title("Raw Data")
-    plt.ylabel("Current")
-
     #normalize data
     channel1.normalize()
-
-    #graph normalized data
-    channel1.photometryDf.plot(x="Time", y=["norm"], kind="line", figsize=(10,5))
-    plt.title("Normalized 465")
-    plt.ylabel("f/f")
-    plt.show()
-
+    #bin data
     channel1.binData()
+
+    #plot results
+    fig, axes = plt.subplots(2,2)
+    channel1.photometryDf.plot(ax= axes[0,0], x="Time", y=["_465", "_405"], kind="line", figsize=(10, 5))
+    axes[0,0].set_title("Raw 405 and 465 Data")
+    axes[0,0].set_ylabel("Current")
+    channel1.photometryDf.plot(ax = axes[0,1], x="Time", y=["norm"], kind="line", figsize=(10, 5))
+    axes[0,1].set_title("Normalized 465 Signal")
+    axes[0,1].set_ylabel("f/f")
+    channel1.binnedPtDf.plot(ax = axes[1,0], x="Time", y=["norm"], kind="line", figsize=(10, 5))
+    axes[1,0].set_title("Binned Normalized 465 Signal")
+    axes[1,0].set_ylabel("f/f")
+    plt.show()
 
 main()
