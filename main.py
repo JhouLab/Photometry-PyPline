@@ -58,15 +58,28 @@ def main():
 
     #plot results
     fig, axes = plt.subplots(2,2)
-    channel1.photometryDf.plot(ax= axes[0,0], x="Time", y=["_465", "_405"], kind="line", figsize=(10, 5))
+    channel1.cleanedptDf.plot(ax= axes[0,0], x="Time", y=["_465", "_405"], kind="line", figsize=(10, 5))
     axes[0,0].set_title("Raw 405 and 465 Data")
     axes[0,0].set_ylabel("Current")
-    channel1.photometryDf.plot(ax = axes[0,1], x="Time", y=["norm"], kind="line", figsize=(10, 5))
+    channel1.cleanedptDf.plot(ax = axes[0,1], x="Time", y=["norm"], kind="line", figsize=(10, 5))
     axes[0,1].set_title("Normalized 465 Signal")
     axes[0,1].set_ylabel("f/f")
     channel1.binnedPtDf.plot(ax = axes[1,0], x="Time", y=["norm"], kind="line", figsize=(10, 5))
     axes[1,0].set_title("Binned Normalized 465 Signal")
     axes[1,0].set_ylabel("f/f")
+    fig.tight_layout()
+
+    #get name of original xlsx file for plot names
+    name = fpath.split("/")
+    name = name[len(name) - 1].split(".")
+    name = name[0]
+    name = name + "_graphs.png"
+    #save plots
+    plt.savefig(name)
+
+    channel1.photometryDf.plot(x="_405", y="_465", c="Time", kind="scatter", colormap="viridis")
+
+    #display
     plt.show()
 
 main()
