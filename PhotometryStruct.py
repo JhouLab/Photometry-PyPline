@@ -24,7 +24,7 @@ class PhotometryData:
         if self.cleanedptDf is None:
             print("Error: This data has not been cleaned. Please run clean() before proceeding.")
         else:
-            idxs = self.cleanedptDf[self.cleanedptDf.StartIdx == True].index.tolist()
+            idxs = self.cleanedptDf[self.cleanedptDf["StartIdx"] == True].index.tolist()
             if len(idxs) < 1:
                 print("Error: Could not find any samples which would indicate the start of a new recording window")
             rowsList = []
@@ -95,7 +95,7 @@ class PhotometryData:
             start = idxs[i - 1]
             start += 2
             #need to flag this as new start of window
-            self.cleanedptDf.StartIdx[start] = True
+            self.cleanedptDf["StartIdx"][start] = True
 
             window = self.cleanedptDf.iloc[start:end]
             rowsList.append(window)

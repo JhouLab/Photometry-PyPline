@@ -3,7 +3,6 @@ from tkinter import filedialog
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
-
 import PhotometryStruct
 from PhotometryStruct import PhotometryData
 
@@ -79,10 +78,11 @@ def main():
     excelName = name + "_processed.xlsx"
     #save plots and data
     plt.savefig(figName)
-    with pd.ExcelWriter(excelName) as writer:
-        channel1.cleanedptDf(writer, sheet_name="data")
-        channel1.binnedPtDf(writer, sheet_name="binned data")
-        channel1.mpcDf(writer, sheet_name="Med-Pc")
+    writer = pd.ExcelWriter(excelName, engine="xlsxwriter")
+    channel1.cleanedptDf.to_excel(writer, sheet_name="Data", index=False)
+    channel1.binnedPtDf.to_excel(writer, sheet_name="Binned Data", index=False)
+    channel1.mpcDf.to_excel(writer, sheet_name="Med-Pc", index=False)
+    writer.close()
 
     channel1.photometryDf.plot(x="_405", y="_465", c="Time", kind="scatter", colormap="viridis")
 
