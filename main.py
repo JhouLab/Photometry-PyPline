@@ -2,6 +2,8 @@ import tkinter
 from tkinter import filedialog
 import os
 import matplotlib.pyplot as plt
+import pandas as pd
+
 import PhotometryStruct
 from PhotometryStruct import PhotometryData
 
@@ -73,9 +75,14 @@ def main():
     name = fpath.split("/")
     name = name[len(name) - 1].split(".")
     name = name[0]
-    name = name + "_graphs.png"
-    #save plots
-    plt.savefig(name)
+    figName = name + "_graphs.png"
+    excelName = name + "_processed.xlsx"
+    #save plots and data
+    plt.savefig(figName)
+    with pd.ExcelWriter(excelName) as writer:
+        channel1.cleanedptDf(writer, sheet_name="data")
+        channel1.binnedPtDf(writer, sheet_name="binned data")
+        channel1.mpcDf(writer, sheet_name="Med-Pc")
 
     channel1.photometryDf.plot(x="_405", y="_465", c="Time", kind="scatter", colormap="viridis")
 

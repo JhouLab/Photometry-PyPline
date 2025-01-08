@@ -88,12 +88,12 @@ class PhotometryData:
             start = None
             if i == len(idxs):
                 end = self.cleanedptDf._465.iloc[-1]
-                end -= 1
+                end -= 2
             else:
                 end = idxs[i]
-                end -= 1
+                end -= 2
             start = idxs[i - 1]
-            start += 1
+            start += 2
             #need to flag this as new start of window
             self.cleanedptDf.StartIdx[start] = True
 
