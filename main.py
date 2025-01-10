@@ -36,7 +36,7 @@ def main():
     #get path to .xlsx file
     fpath = getFile()
     #instantiate data structure
-    channel1 = PhotometryStruct.PhotometryData(id_sessionStart = 1, id_sessionEnd = 2)
+    channel1 = PhotometryStruct.PhotometryData(type="pulsed", id_sessionStart = 1, id_sessionEnd = 2)
     channel1.readData(fpath)
     channel1.clean()
     print("Select a paradigm to analyze (default = 1):")

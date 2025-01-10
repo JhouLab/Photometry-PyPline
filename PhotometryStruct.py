@@ -2,17 +2,24 @@ import pandas as pd
 import openpyxl
 
 class PhotometryData:
-    def __init__(self, ptDf = None, mpcDf = None, autoFlprofile = 0, cutoff = 0.009, id_sessionStart = 1, id_sessionEnd = 2):
+    def __init__(self, type= "pulsed", ptDf = None, mpcDf = None, autoFlprofile = 0, cutoff = 0.009, id_sessionStart = 1, id_sessionEnd = 2):
         self.photometryDf = ptDf
         self.mpcDf = mpcDf
-        self.cleanedptDf = None
-        self.binnedPtDf = None
         self.autoFlProfile = autoFlprofile
         #threshold value which we remove samples under (these are samples which the laser was not active for)
         self.cutoff = cutoff
-        self.normConst = 0
         self.id_sessionStart = id_sessionStart
         self.id_sessionEnd = id_sessionEnd
+        self.cleanedptDf = None
+        self.binnedPtDf = None
+        #normaliztion constant, which is functionally the x-axis from the caluclated linear regression
+        self.normConst = 0
+        if type.upper() == "PULSED":
+            self.isPulsed = True
+        elif type.upper() == "CONTINUOUS":
+            self.isPulsed = False
+        else:
+            print("Error: Passed recording type is not recognized. Passed", type, "does not match either 'pulsed' or 'continuous'")
 
     def getTimestampTimes(self, timestampID):
         tmp = self.mpcDf[self.mpcDf.ID == timestampID].secs
