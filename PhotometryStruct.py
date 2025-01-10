@@ -14,7 +14,7 @@ class PhotometryData:
         self.id_sessionEnd = id_sessionEnd
         self.cleanedptDf = None
         self.binnedPtDf = None
-        #normaliztion constant, which is functionally the x-axis from the caluclated linear regression
+        #normaliztion constant, which is functionally the slope from the caluclated linear regression
         self.normConst = 0
         if type.upper() == "PULSED":
             self.isPulsed = True
@@ -135,10 +135,10 @@ class PhotometryData:
             x2 = self.photometryDf._405[end - 20:end].mean()
 
             intercept = x2 - (y2 * (x1 - x2)) / (y1 - y2)
-            print("X-intercept of regression: ", intercept)
+            print("Slope of regression: ", intercept)
             if intercept > max(y1, y2) * 0.8:
                 intercept = 0
-                print("Warning: X-intercept is greater than actual x values, assuming intercept is 0")
+                print("Warning: y-intercept is greater than actual y values, assuming slope is 0")
             #add contribution of autofluorescence
             self.normConst = intercept
             intercept += self.autoFlProfile
