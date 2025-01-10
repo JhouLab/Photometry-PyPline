@@ -52,9 +52,8 @@ def main():
         else:
             print("Incorrect input")
 
-    #normalize data
+    #normalize and bin data
     channel1.normalize()
-    #bin data
     channel1.binData()
 
     #plot results
@@ -74,8 +73,8 @@ def main():
     name = fpath.split("/")
     name = name[len(name) - 1].split(".")
     name = name[0]
-    figName = name + "_graphs.png"
-    excelName = name + "_processed.xlsx"
+    figName = name + "_Signal.png"
+    excelName = name + "_Processed.xlsx"
     #save plots and data
     plt.savefig(figName)
     writer = pd.ExcelWriter(excelName, engine="xlsxwriter")
@@ -84,9 +83,13 @@ def main():
     channel1.mpcDf.to_excel(writer, sheet_name="Med-Pc", index=False)
     writer.close()
 
+    #scatter plot of 465 vs 405 data
     channel1.photometryDf.plot(x="_405", y="_465", c="Time", kind="scatter", colormap="viridis")
+    #save
+    figName = name + "_Scatter.png"
+    plt.savefig(figName)
 
-    #display
+    #display graphs
     plt.show()
 
 main()
