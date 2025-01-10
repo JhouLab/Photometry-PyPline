@@ -3,8 +3,7 @@ import openpyxl
 
 
 class PhotometryData:
-    def __init__(self, type="pulsed", ptDf=None, mpcDf=None, autoFlprofile=0, cutoff=0.009, id_sessionStart=1,
-                 id_sessionEnd=2):
+    def __init__(self, type="pulsed", ptDf=None, mpcDf=None, autoFlprofile=0, cutoff=0.009, id_sessionStart=1, id_sessionEnd=2):
         self.photometryDf = ptDf
         self.mpcDf = mpcDf
         self.autoFlProfile = autoFlprofile
@@ -29,10 +28,12 @@ class PhotometryData:
             tmp = self.mpcDf[self.mpcDf.ID == timestampID].secs
             return tmp.values
         else:
-            raise UserWarning("cannot retrieve timestamps from empty Med-pc dataframe. Does the original data include Med-Pc Data?")
+            raise UserWarning("Cannot retrieve timestamps from empty Med-pc dataframe. Does the original data include Med-Pc Data?")
 
     #assumes clean() has already been ran on data
     def binData(self):
+        if self.isPulsed is False:
+            raise TypeError("Recording type is continuous. Cannot bin data for non-pulsed recordings")
         if self.cleanedptDf is None:
             raise UserWarning("This data has not been cleaned. Please run clean() before proceeding.")
         else:
@@ -91,38 +92,40 @@ class PhotometryData:
             #reset index to consecutive
             self.cleanedptDf.reset_index(drop=True, inplace=True)
 
-            self.cleanedptDf["StartIdx"] = self.cleanedptDf["Time"].diff() > 1
-            idxs = self.cleanedptDf[self.cleanedptDf.StartIdx].index
-            if len(idxs) < 1:
-                raise TypeError("Could not find any samples which would indicate the start of a new recording window")
-            rowsList = []
-            print(idxs)
             # find start and end times based on idxs where the time "jumps", signifying a new recording window
-            # remove 1 sample at start and end to exclude points were laser was partially on/off
-            for i in range(1, len(idxs)):
-                end = None
-                start = None
-                if i == len(idxs):
-                    end = self.cleanedptDf._465.iloc[-1]
-                    end -= 2
-                else:
-                    end = idxs[i]
-                    end -= 2
-                start = idxs[i - 1]
-                start += 2
-                #need to flag this as new start of window
-                self.cleanedptDf["StartIdx"][start] = True
+            # remove 2 samples at start and end to exclude points where laser was partially on/off
+            if self.isPulsed is True:
+                self.cleanedptDf["StartIdx"] = self.cleanedptDf["Time"].diff() > 1
+                idxs = self.cleanedptDf[self.cleanedptDf.StartIdx].index
+                if len(idxs) < 1:
+                    raise TypeError("Could not find any samples which would indicate the start of a new recording window")
+                rowsList = []
+                print(idxs)
+                for i in range(1, len(idxs)):
+                    end = None
+                    start = None
+                    if i == len(idxs):
+                        end = self.cleanedptDf._465.iloc[-1]
+                        end -= 2
+                    else:
+                        end = idxs[i]
+                        end -= 2
+                    start = idxs[i - 1]
+                    start += 2
+                    #need to flag this sample as new start of window
+                    self.cleanedptDf["StartIdx"][start] = True
 
-                window = self.cleanedptDf.iloc[start:end]
-                rowsList.append(window)
+                    window = self.cleanedptDf.iloc[start:end]
+                    rowsList.append(window)
 
-            self.cleanedptDf = pd.concat(rowsList)
-            self.cleanedptDf.reset_index(drop=True, inplace=True)
+                    self.cleanedptDf = pd.concat(rowsList)
+                    self.cleanedptDf.reset_index(drop=True, inplace=True)
 
-            #self.cleanedptDf["StartIdx"] = self.cleanedptDf["Time"].diff() > 1
             self.cleaned = True
 
     def normalize(self):
+        if self.isPulsed is False:
+            raise NotImplementedError("Normalization has not been implemented for continuous recordings")
         if self.cleanedptDf is None:
             raise UserWarning("This data has not been cleaned. Please run clean() before proceeding.")
         else:

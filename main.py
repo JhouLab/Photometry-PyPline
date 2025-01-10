@@ -89,7 +89,7 @@ def main():
 
         #scatter plot of 465 vs 405 data
         channel1.photometryDf.plot(x="_405", y="_465", c="Time", kind="scatter", colormap="viridis")
-        #save
+        #save graph
         figName = name + "_Scatter.png"
         plt.savefig(figName)
 
