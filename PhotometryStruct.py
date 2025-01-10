@@ -124,8 +124,6 @@ class PhotometryData:
             self.cleaned = True
 
     def normalize(self):
-        if self.isPulsed is False:
-            raise NotImplementedError("Normalization has not been implemented for continuous recordings")
         if self.cleanedptDf is None:
             raise UserWarning("This data has not been cleaned. Please run clean() before proceeding.")
         else:

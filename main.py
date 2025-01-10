@@ -36,6 +36,8 @@ def main():
     #get path to .xlsx file
     fpath = getFile()
     channel1 = None
+    choice = None
+    type = None
     print("Select a paradigm to analyze (default = 1):")
     print("1. Open Field")
     while True:
@@ -49,15 +51,30 @@ def main():
         else:
             print("Incorrect input")
 
+    print("Select Recording Type (default = 1):")
+    print("1. Continuous")
+    print("2. Pulsed")
+    while True:
+        val = input("> ")
+        if val == "1" or val == "":
+            type = "continuous"
+            break
+        elif val == "2":
+            type = "pulsed"
+            break
+        else:
+            print("Incorrect input")
+
     #instantiate data structure
     if choice == 1:
-        channel1 = PhotometryStruct.PhotometryData(type= "pulsed", id_sessionStart= pulsedEvents["id_sessionStart"], id_sessionEnd= pulsedEvents["id_sessionEnd"])
+        channel1 = PhotometryStruct.PhotometryData(type= type, id_sessionStart= pulsedEvents["id_sessionStart"], id_sessionEnd= pulsedEvents["id_sessionEnd"])
         channel1.readData(fpath)
         channel1.clean()
 
         #normalize and bin data
         channel1.normalize()
-        channel1.binData()
+        if type == "pulsed":
+            channel1.binData()
 
     if channel1 is not None:
         #plot results
@@ -68,9 +85,10 @@ def main():
         channel1.cleanedptDf.plot(ax = axes[0,1], x="Time", y=["norm"], kind="line", figsize=(10, 5))
         axes[0,1].set_title("Normalized 465 Signal")
         axes[0,1].set_ylabel("f/f")
-        channel1.binnedPtDf.plot(ax = axes[1,0], x="Time", y=["norm"], kind="line", figsize=(10, 5))
-        axes[1,0].set_title("Binned Normalized 465 Signal")
-        axes[1,0].set_ylabel("f/f")
+        if type == "pulsed":
+            channel1.binnedPtDf.plot(ax = axes[1,0], x="Time", y=["norm"], kind="line", figsize=(10, 5))
+            axes[1,0].set_title("Binned Normalized 465 Signal")
+            axes[1,0].set_ylabel("f/f")
         fig.tight_layout()
 
         #get name of original xlsx file for plot names
@@ -83,7 +101,8 @@ def main():
         plt.savefig(figName)
         writer = pd.ExcelWriter(excelName, engine="xlsxwriter")
         channel1.cleanedptDf.to_excel(writer, sheet_name="Data", index=False)
-        channel1.binnedPtDf.to_excel(writer, sheet_name="Binned Data", index=False)
+        if type == "pulsed":
+            channel1.binnedPtDf.to_excel(writer, sheet_name="Binned Data", index=False)
         channel1.mpcDf.to_excel(writer, sheet_name="Med-Pc", index=False)
         writer.close()
 
