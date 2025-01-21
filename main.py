@@ -80,14 +80,14 @@ def main():
         #plot results
         fig, axes = plt.subplots(2,2)
         channel1.cleanedptDf.plot(ax= axes[0,0], x="Time", y=["_465", "_405"], kind="line", figsize=(10, 5))
-        axes[0,0].set_title("Raw 405 and 465 Data")
+        axes[0,0].set_title("Raw Data")
         axes[0,0].set_ylabel("Current")
         channel1.cleanedptDf.plot(ax = axes[0,1], x="Time", y=["norm"], kind="line", figsize=(10, 5))
-        axes[0,1].set_title("Normalized 465 Signal")
+        axes[0,1].set_title("Normalized")
         axes[0,1].set_ylabel("f/f")
         if type == "pulsed":
             channel1.binnedPtDf.plot(ax = axes[1,0], x="Time", y=["norm"], kind="line", figsize=(10, 5))
-            axes[1,0].set_title("Binned Normalized 465 Signal")
+            axes[1,0].set_title("Binned and Normalized")
             axes[1,0].set_ylabel("f/f")
         fig.tight_layout()
 
@@ -103,7 +103,8 @@ def main():
         channel1.cleanedptDf.to_excel(writer, sheet_name="Data", index=False)
         if type == "pulsed":
             channel1.binnedPtDf.to_excel(writer, sheet_name="Binned Data", index=False)
-        channel1.mpcDf.to_excel(writer, sheet_name="Med-Pc", index=False)
+        if channel1.mpcDf is not None:
+            channel1.mpcDf.to_excel(writer, sheet_name="Med-Pc", index=False)
         writer.close()
 
         #scatter plot of 465 vs 405 data
