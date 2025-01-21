@@ -170,7 +170,7 @@ class PhotometryData:
             self.pt_cleaned["norm"] = self.pt_cleaned._465 / (self.pt_cleaned._405 - intercept)
             print(self.pt_cleaned)
 
-    #given a path to a .xlsx file, loads Med-Pc and Photometry data into data structure
+    #given a path to a .xlsx file, loads Med-Pc, Photometry, and DeeplabCut data into data structure
     def readData(self, fpath):
         rawData = None
         timestampData = None
@@ -186,5 +186,12 @@ class PhotometryData:
         except:
             print("Warning: Could not find Med-Pc data in file. Is there an excel tab labeled 'Med-Pc'?")
 
+        #look for DLC Data
+        try:
+            DLCData = pd.read_excel(fpath, sheet_name="DLC", header=0)
+        except:
+            print("Warning: Could not find DeepLabCut")
+
         self.pt_raw = rawData
         self.mpc_data = timestampData
+        self.dlc_data = DLCData
