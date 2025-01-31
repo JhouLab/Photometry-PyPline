@@ -13,10 +13,7 @@ root = tkinter.Tk()
 root.withdraw()
 
 #dictionary of events in Med-Pc timestamp data
-pulsedEvents = {"id_sessionStart": 1,
-             "id_sessionEnd": 2,
-             "id_recordingStart": 5,
-             "id_recordingStop": 6}
+pulsedEvents = {"id_sessionStart": 1, "id_sessionEnd": 2, "id_recordingStart": 5, "id_recordingStop": 6}
 
 def getFile():
     try:
@@ -77,9 +74,17 @@ def main():
 
     #DLC data only processing
     if type == "DLC-only":
-        channel1 = BehaviorStruct.BehaviorData()
+        DLCEvents = {"id_trialStart": 71, "id_cueAvers": 34, "id_cueAversHigh": 38, "id_cueNeutral": 36}
+        channel1 = BehaviorStruct.BehaviorData(id_eventsDict= DLCEvents)
         channel1.readData('C:/Users/nicho/Desktop/FearCond_NaC_C1/2s_Shock/BF339_1-27-254_Sal-1/2025_01_27-13_31_46/Fluorescence.xlsx')
         channel1.clean()
+        channel1.alignEvents('Back1', baseline= 10, outcome= 10)
+
+        writer = pd.ExcelWriter("Test.xlsx", engine="xlsxwriter")
+        channel1.dlc_data.to_excel(writer, sheet_name="DLC_Data", index=True)
+        channel1.dlc_cleaned.to_excel(writer, sheet_name="DLC_Cleaned", index=True)
+        channel1.dlc_TTL.to_excel(writer, sheet_name="DLC-TTL", index=False)
+        writer.close()
 
     #pulsed recordings
     if choice == 1 and type != "DLC-only":
