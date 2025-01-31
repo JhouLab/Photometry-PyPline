@@ -17,10 +17,11 @@ class BehaviorData:
         #fps
         self.fps = fps
 
+
     def calcVel(self, df):
         vel = np.array([])
         vel = np.append(vel, 0)
-        for x in range(1, int(df.shape[0])):
+        for x in range(1, int(df.shape[0] - 1)):
             if df.iloc[x, 0] is None or df.iloc[x, 1] is None:
                 vel = np.append(vel, np.nan)
             else:
@@ -28,7 +29,10 @@ class BehaviorData:
                 dist = math.sqrt(math.exp((df.iloc[x, 0] - df.iloc[x-1, 0])) + (math.exp(df.iloc[x, 1] - df.iloc[x-1, 1])))
                 vel = np.append(vel, dist)
 
-        return vel
+        #calculate moving average for a 10 sample windwow
+        test = np.convolve(vel, np.ones(10), 'valid') / 10
+        test = np.concatenate([[0, 0, 0, 0, 0], test, [0,0,0,0,0]])
+        return test
 
 
 
@@ -51,7 +55,7 @@ class BehaviorData:
             self.dlc_cleaned = pd.concat([self.dlc_cleaned, tmp], axis=1)
 
         #drop first placeholder column
-        #self.dlc_cleaned = self.dlc_cleaned.drop(self.dlc_cleaned.columns[0], axis=1)
+        self.dlc_cleaned = self.dlc_cleaned.iloc[:, 1:]
 
         with pd.option_context('display.max_columns', None):
             print(self.dlc_cleaned)
