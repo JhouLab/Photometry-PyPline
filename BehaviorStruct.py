@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import openpyxl
+import math
 
 class BehaviorData:
     def __init__(self, id_eventsDict = {}, mpcDF = None, dlcData = None, threshold = 0.6, fps = 30):
@@ -16,6 +17,21 @@ class BehaviorData:
         #fps
         self.fps = fps
 
+    def calcVel(self, df):
+        vel = np.array([])
+        vel = np.append(vel, 0)
+        for x in range(1, int(df.shape[0])):
+            if df.iloc[x, 0] is None or df.iloc[x, 1] is None:
+                vel = np.append(vel, np.nan)
+            else:
+                #calculate euclidian distance
+                dist = math.sqrt(math.exp((df.iloc[x, 0] - df.iloc[x-1, 0])) + (math.exp(df.iloc[x, 1] - df.iloc[x-1, 1])))
+                vel = np.append(vel, dist)
+
+        return vel
+
+
+
     def clean(self):
         #rename columns in original dataframe
         self.dlc_data.columns = (self.dlc_data.iloc[0] + '_' + self.dlc_data.iloc[1])
@@ -28,10 +44,14 @@ class BehaviorData:
         for x in range(0, int(self.dlc_data.shape[1]), 3):
             tmp = self.dlc_data.iloc[:, x:x+3]
             tmp = tmp[tmp.iloc[:, 2] >= self.threshold]
+            pName = tmp.columns[0].split("_")
+            pName = pName[0]
+            pName = pName + "_Vel"
+            tmp[pName] = self.calcVel(tmp)
             self.dlc_cleaned = pd.concat([self.dlc_cleaned, tmp], axis=1)
 
         #drop first placeholder column
-        self.dlc_cleaned = self.dlc_cleaned(self.dlc_cleaned.columns[0], axis=1)
+        #self.dlc_cleaned = self.dlc_cleaned.drop(self.dlc_cleaned.columns[0], axis=1)
 
         with pd.option_context('display.max_columns', None):
             print(self.dlc_cleaned)
