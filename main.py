@@ -3,8 +3,11 @@ from tkinter import filedialog
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
+
+import BehaviorStruct
 import PhotometryStruct
 from PhotometryStruct import PhotometryData
+from BehaviorStruct import BehaviorData
 
 root = tkinter.Tk()
 root.withdraw()
@@ -34,39 +37,52 @@ def main():
     print("\n==Fiber Photometry Analysis for Pulsed Recordings==")
     print("Note: Currently, this program only accepts Doric Neuroscience Studio v5 type .xlsx files\n")
     #get path to .xlsx file
-    fpath = getFile()
+    fpath = None
     channel1 = None
     choice = None
     type = None
-    print("Select a paradigm to analyze (default = 1):")
-    print("1. Open Field")
-    while True:
-        val = input("> ")
-        if val == "1":
-            choice = 1
-            break
-        elif val == "":  #default option
-            choice = 1
-            break
-        else:
-            print("Incorrect input")
-
     print("Select Recording Type (default = 1):")
     print("1. Continuous")
     print("2. Pulsed")
+    print("3. DeepLabCut Data Only")
     while True:
         val = input("> ")
         if val == "1" or val == "":
             type = "continuous"
+            fpath = getFile()
             break
         elif val == "2":
             type = "pulsed"
+            fpath = getFile()
+            break
+        elif val == "3":
+            type = "DLC-only"
             break
         else:
             print("Incorrect input")
 
-    #instantiate data structure
-    if choice == 1:
+    if type == "continuous" or type == "pulsed":
+        print("Select a paradigm to analyze (default = 1):")
+        print("1. Open Field")
+        while True:
+            val = input("> ")
+            if val == "1":
+                choice = 1
+                break
+            elif val == "":  #default option
+                choice = 1
+                break
+            else:
+                print("Incorrect input")
+
+    #DLC data only processing
+    if type == "DLC-only":
+        channel1 = BehaviorStruct.BehaviorData()
+        channel1.readData('C:/Users/nicho/Desktop/FearCond_NaC_C1/2s_Shock/BF339_1-27-254_Sal-1/2025_01_27-13_31_46/Fluorescence.xlsx')
+        channel1.clean()
+
+    #pulsed recordings
+    if choice == 1 and type != "DLC-only":
         channel1 = PhotometryStruct.PhotometryData(type= type, id_sessionStart= pulsedEvents["id_sessionStart"], id_sessionEnd= pulsedEvents["id_sessionEnd"])
         channel1.readData(fpath)
         channel1.clean()
@@ -76,7 +92,7 @@ def main():
         if type == "pulsed":
             channel1.binData()
 
-    if channel1 is not None:
+    if channel1 != None and type != "DLC-only":
         #plot results
         fig, axes = plt.subplots(2,2)
         channel1.cleanedptDf.plot(ax= axes[0,0], x="Time", y=["_465", "_405"], kind="line", figsize=(10, 5))
