@@ -3,7 +3,7 @@ import pandas as pd
 import openpyxl
 
 class BehaviorData:
-    def __init__(self, id_eventsDict = {}, mpcDF = None, dlcData = None, threshold = 0.6):
+    def __init__(self, id_eventsDict = {}, mpcDF = None, dlcData = None, threshold = 0.6, fps = 30):
         #dataframes
         self.mpc_data = mpcDF
         self.dlc_data = dlcData
@@ -13,20 +13,25 @@ class BehaviorData:
         self.id_events = id_eventsDict
         #labeling confidence threshold
         self.threshold = threshold
+        #fps
+        self.fps = fps
 
     def clean(self):
         #rename columns in original dataframe
         self.dlc_data.columns = (self.dlc_data.iloc[0] + '_' + self.dlc_data.iloc[1])
         self.dlc_data = self.dlc_data.iloc[2:].reset_index(drop=True)
+        #change index's to reflect time in seconds instead of frame number
+        self.dlc_data['Time'] = self.dlc_data.index / self.fps
+        self.dlc_data.set_index('Time', inplace=True)
         #process each part independently, and remove coordinate pairs which fall below confidence threshold
-        self.dlc_cleaned = self.dlc_data[['Nose_x']]
+        self.dlc_cleaned = self.dlc_data[["Nose_x"]]
         for x in range(0, int(self.dlc_data.shape[1]), 3):
             tmp = self.dlc_data.iloc[:, x:x+3]
             tmp = tmp[tmp.iloc[:, 2] >= self.threshold]
             self.dlc_cleaned = pd.concat([self.dlc_cleaned, tmp], axis=1)
 
         #drop first placeholder column
-        self.dlc_cleaned(self.dlc_cleaned.columns[0], axis=1)
+        self.dlc_cleaned = self.dlc_cleaned(self.dlc_cleaned.columns[0], axis=1)
 
         with pd.option_context('display.max_columns', None):
             print(self.dlc_cleaned)
