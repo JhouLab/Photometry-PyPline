@@ -27,12 +27,12 @@ class BehaviorData:
             closest = self.dlc_TTL.sub(events[y]).abs().idxmin()
             closest = closest['onset']
             offset = self.dlc_TTL.at[closest, 'offset_MPC']
-            tMin = events[y] - baseline + offset
-            tMax = events[y] + outcome + offset
+            tMin = round(events[y] - baseline + offset, 2)
+            tMax = round(events[y] + outcome + offset, 2)
 
             #find closest timepoints in DLC data to start and stop times
-            min = self.dlc_cleaned.iloc[self.dlc_data.index.get_loc(tMin)]
-            max = self.dlc_cleaned.iloc[self.dlc_data.index.get_loc(tMax)]
+            min = self.dlc_cleaned['Time'].sub(tMin).abs().idxmin()
+            max = self.dlc_cleaned['Time'].sub(tMax).abs().idxmin()
 
             print(min)
             print(max)
@@ -93,9 +93,7 @@ class BehaviorData:
         #rename columns in original dataframe
         self.dlc_data.columns = (self.dlc_data.iloc[0] + '_' + self.dlc_data.iloc[1])
         self.dlc_data = self.dlc_data.iloc[2:].reset_index(drop=True)
-        #change index's to reflect time in seconds instead of frame number
-        self.dlc_data['Time'] = self.dlc_data.index / self.fps
-        self.dlc_data.set_index('Time', inplace=True)
+        self.dlc_data['Time'] = np.round(self.dlc_data.index / self.fps, 2)
         #process each part independently, and remove coordinate pairs which fall below confidence threshold
         self.dlc_cleaned = self.dlc_data[["Nose_x"]]
         for x in range(0, int(self.dlc_data.shape[1]), 3):
