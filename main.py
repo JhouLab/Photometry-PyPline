@@ -80,10 +80,15 @@ def main():
         channel1.clean()
         channel1.alignEvents('Back1', baseline= 10, outcome= 10)
 
-        writer = pd.ExcelWriter("Test.xlsx", engine="xlsxwriter")
+        print("Saving processed and aligned data in .xlsx format...")
+        writer = pd.ExcelWriter("Test_All.xlsx", engine="xlsxwriter")
         channel1.dlc_data.to_excel(writer, sheet_name="DLC_Data", index=True)
         channel1.dlc_cleaned.to_excel(writer, sheet_name="DLC_Cleaned", index=True)
         channel1.dlc_TTL.to_excel(writer, sheet_name="DLC-TTL", index=False)
+        writer.close()
+        writer = pd.ExcelWriter("Test_Aligned", engine= 'xlsxwriter')
+        for key, value in channel1.dlc_alignedEvents.items():
+            value.to_excel(writer, sheet_name= key, index= True)
         writer.close()
 
     #pulsed recordings

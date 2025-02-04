@@ -21,24 +21,31 @@ class BehaviorData:
     def processEvent(self, eventID, part, baseline, outcome):
         # get the timestamps for each event with ID
         events = self.getMPCTimes(eventID)
+        df = pd.DataFrame()
         pName = part + "_Vel"
         for y in range(len(events)):
             # find closest DLC-TTL event to behavioral event
             closest = self.dlc_TTL.sub(events[y]).abs().idxmin()
             closest = closest['onset']
             offset = self.dlc_TTL.at[closest, 'offset_MPC']
-            tMin = round(events[y] - baseline + offset, 2)
-            tMax = round(events[y] + outcome + offset, 2)
+            tMin = events[y] - baseline + offset
+            tMax = events[y] + outcome + offset
 
             #find closest timepoints in DLC data to start and stop times
             min = self.dlc_cleaned['Time'].sub(tMin).abs().idxmin()
             max = self.dlc_cleaned['Time'].sub(tMax).abs().idxmin()
 
-            print(min)
-            print(max)
+            trace = self.dlc_cleaned.iloc[min:max][pName]
+            trace.reset_index(drop=True, inplace=True)
+            print("Min: ", tMin)
+            print("MAx: ", tMax)
+            df[y] = trace
 
-            #trace = self.dlc_cleaned.iloc[tMin:tMax][pName]
-            #print(trace)
+        #take row average
+        df['Average'] = df.mean(axis=1, skipna=True)
+        return df
+
+
 
     def getMPCTimes(self, timestampID):
         if self.mpc_data is not None:
@@ -49,10 +56,11 @@ class BehaviorData:
 
     #aligns segment of data to each type of event using the id_eventsDict
     def alignEvents(self, part, baseline = 10, outcome = 10):
+        print("Aligning DLC positional data to Med-Pc timestamps...")
         if len(self.id_events) < 1:
             print("Error: No dictionary of events provided. Cannot align events.")
         else:
-            #first, calculate offsets of each TLL pulse detected by camera compared to each TrialStart
+            #Calculate offsets of each TLL pulse detected by camera compared to each TrialStart
             MPC = self.getMPCTimes(self.id_events.get("id_trialStart"))
             for x in range(len(MPC)):
                 closest = self.dlc_TTL.sub(MPC[x]).abs().idxmin()
@@ -63,13 +71,15 @@ class BehaviorData:
             self.processEvent(34, part, baseline, outcome)
 
             #loop though event dictionary to process each event, using TTL offsets to align animal velocity
-            #vals = list(self.id_events.values())
-            #for x in range(len(vals)):
-                #eventName = self.id_events[x]
-                #eventName = eventName.split("_")
-                #eventName = eventName[1]
+            for key, value in self.id_events.items():
+                eventName = key.split("_")
+                eventName = eventName[1]
+                print("Processing event ", eventName, "...")
+                self.dlc_alignedEvents[eventName] = self.processEvent(value, part, baseline, outcome)
 
-    def calcVel(self, df):
+            print(self.dlc_alignedEvents)
+
+    def calcVel(self, df, movingAverage = False):
         vel = np.array([])
         vel = np.append(vel, 0)
         for x in range(1, int(df.shape[0] - 1)):
@@ -81,22 +91,24 @@ class BehaviorData:
                 vel = np.append(vel, dist)
 
         #calculate moving average for a 10 sample windwow
-        test = np.convolve(vel, np.ones(10), 'valid') / 10
-        #first 5 and last 5 samples cannot be calculated, so pad array so that dimensions fit with existing data
-        test = np.concatenate([[0, 0, 0, 0, 0], test, [0,0,0,0,0]])
+        if movingAverage == True:
+            print("Warning: calculating the moving average causes unexpected results with Nan values. Use with caution")
+            test = np.convolve(vel, np.ones(10), 'valid') / 10
+            #first 5 and last 5 samples cannot be calculated, so pad array so that dimensions fit with existing data
+            test = np.concatenate([[0, 0, 0, 0, 0], test, [0,0,0,0,0]])
 
         return test
 
 
 
     def clean(self):
+        print("Cleaning DLC data...")
         #rename columns in original dataframe
         self.dlc_data.columns = (self.dlc_data.iloc[0] + '_' + self.dlc_data.iloc[1])
         self.dlc_data = self.dlc_data.iloc[2:].reset_index(drop=True)
-        self.dlc_data['Time'] = np.round(self.dlc_data.index / self.fps, 2)
         #process each part independently, and remove coordinate pairs which fall below confidence threshold
         self.dlc_cleaned = self.dlc_data[["Nose_x"]]
-        for x in range(0, int(self.dlc_data.shape[1]), 3):
+        for x in range(0, int(self.dlc_data.shape[1]) - 1, 3):
             tmp = self.dlc_data.iloc[:, x:x+3]
             tmp = tmp[tmp.iloc[:, 2] >= self.threshold]
             pName = tmp.columns[0].split("_")
@@ -107,6 +119,7 @@ class BehaviorData:
 
         #drop first placeholder column
         self.dlc_cleaned = self.dlc_cleaned.iloc[:, 1:]
+        self.dlc_cleaned['Time'] = np.round(self.dlc_data.index / self.fps, 2)
 
         #rename DLC-TTL data columns
         self.dlc_TTL.columns = ['onset', 'offset']
