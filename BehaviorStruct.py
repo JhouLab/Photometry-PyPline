@@ -18,13 +18,17 @@ class BehaviorData:
         #fps of recording
         self.fps = fps
 
+    #Given an eventID int, part name string, baseline interval int, and outcome int.
+    #Align trace of data to closest trialstart TTL timestamp and apply the pre-calculated offset compared to MED-Pc timestamp.
+    #This function should be theorhetically recording FPS agnostic, as it locates closest rows in dataframe based on the time, not by frame index.
     def processEvent(self, eventID, part, baseline, outcome):
-        # get the timestamps for each event with ID
+        # get the timestamps for each event with passed ID
         events = self.getMPCTimes(eventID)
         df = pd.DataFrame()
         pName = part + "_Vel"
         for y in range(len(events)):
             # find closest DLC-TTL event to behavioral event
+            # these are the trail start TTls - they should be approximate to each event
             closest = self.dlc_TTL.sub(events[y]).abs().idxmin()
             closest = closest['onset']
             offset = self.dlc_TTL.at[closest, 'offset_MPC']
@@ -37,12 +41,15 @@ class BehaviorData:
 
             trace = self.dlc_cleaned.iloc[min:max][pName]
             trace.reset_index(drop=True, inplace=True)
-            print("Min: ", tMin)
-            print("MAx: ", tMax)
             df[y] = trace
 
         #take row average
         df['Average'] = df.mean(axis=1, skipna=True)
+        df['SD'] = df.std(axis=1, skipna=True)
+        #reindex dataframe so times are event centric
+        time = np.linspace(0 - baseline, 0 + outcome, df.shape[0])
+        df['Time'] = time
+        df.set_index('Time')
         return df
 
 
@@ -68,26 +75,22 @@ class BehaviorData:
                 offset = self.dlc_TTL.at[closest, 'onset'] - MPC[x]
                 self.dlc_TTL.at[closest, 'offset_MPC'] = offset
 
-            self.processEvent(34, part, baseline, outcome)
-
             #loop though event dictionary to process each event, using TTL offsets to align animal velocity
             for key, value in self.id_events.items():
                 eventName = key.split("_")
                 eventName = eventName[1]
-                print("Processing event ", eventName, "...")
+                print("Processing event", eventName, "...")
                 self.dlc_alignedEvents[eventName] = self.processEvent(value, part, baseline, outcome)
-
-            print(self.dlc_alignedEvents)
 
     def calcVel(self, df, movingAverage = False):
         vel = np.array([])
         vel = np.append(vel, 0)
-        for x in range(1, int(df.shape[0] - 1)):
+        for x in range(1, int(df.shape[0])):
             if df.iloc[x, 0] is None or df.iloc[x, 1] is None:
                 vel = np.append(vel, np.nan)
             else:
                 #calculate euclidian distance
-                dist = math.sqrt(math.exp((df.iloc[x, 0] - df.iloc[x-1, 0])) + (math.exp(df.iloc[x, 1] - df.iloc[x-1, 1])))
+                dist = math.dist((df.iloc[x-1, 0] , df.iloc[x-1, 1]), (df.iloc[x,0] , df.iloc[x, 1]))
                 vel = np.append(vel, dist)
 
         #calculate moving average for a 10 sample windwow
@@ -96,7 +99,6 @@ class BehaviorData:
             test = np.convolve(vel, np.ones(10), 'valid') / 10
             #first 5 and last 5 samples cannot be calculated, so pad array so that dimensions fit with existing data
             test = np.concatenate([[0, 0, 0, 0, 0], test, [0,0,0,0,0]])
-
             return test
         else:
             return vel
@@ -112,10 +114,12 @@ class BehaviorData:
         self.dlc_cleaned = self.dlc_data[["Nose_x"]]
         for x in range(0, int(self.dlc_data.shape[1]) - 1, 3):
             tmp = self.dlc_data.iloc[:, x:x+3]
-            tmp = tmp[tmp.iloc[:, 2] >= self.threshold]
+            #set points where labeling is not above threshold to nan
+            tmp = tmp.where(tmp.iloc[:, 2] >= self.threshold)
             pName = tmp.columns[0].split("_")
             pName = pName[0]
             pName = pName + "_Vel"
+            #calculate velocity
             tmp[pName] = self.calcVel(tmp)
             self.dlc_cleaned = pd.concat([self.dlc_cleaned, tmp], axis=1)
 

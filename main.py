@@ -54,6 +54,7 @@ def main():
             break
         elif val == "3":
             type = "DLC-only"
+            fpath = getFile()
             break
         else:
             print("Incorrect input")
@@ -76,7 +77,7 @@ def main():
     if type == "DLC-only":
         DLCEvents = {"id_trialStart": 71, "id_cueAvers": 34, "id_cueAversHigh": 38, "id_cueNeutral": 36}
         channel1 = BehaviorStruct.BehaviorData(id_eventsDict= DLCEvents)
-        channel1.readData('C:/Users/nicho/Desktop/FearCond_NaC_C1/2s_Shock/BF339_1-27-254_Sal-1/2025_01_27-13_31_46/Fluorescence.xlsx')
+        channel1.readData(fpath)
         channel1.clean()
         channel1.alignEvents('Back1', baseline= 10, outcome= 10)
 
@@ -86,9 +87,10 @@ def main():
         channel1.dlc_cleaned.to_excel(writer, sheet_name="DLC_Cleaned", index=True)
         channel1.dlc_TTL.to_excel(writer, sheet_name="DLC-TTL", index=False)
         writer.close()
-        writer = pd.ExcelWriter("Test_Aligned", engine= 'xlsxwriter')
+        writer = pd.ExcelWriter("Test_Aligned.xlsx", engine= 'xlsxwriter')
         for key, value in channel1.dlc_alignedEvents.items():
-            value.to_excel(writer, sheet_name= key, index= True)
+            sName = key + "_velocity"
+            value.to_excel(writer, sheet_name= sName, index= True)
         writer.close()
 
     #pulsed recordings
