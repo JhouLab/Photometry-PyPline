@@ -97,7 +97,9 @@ class BehaviorData:
             #first 5 and last 5 samples cannot be calculated, so pad array so that dimensions fit with existing data
             test = np.concatenate([[0, 0, 0, 0, 0], test, [0,0,0,0,0]])
 
-        return test
+            return test
+        else:
+            return vel
 
 
 
