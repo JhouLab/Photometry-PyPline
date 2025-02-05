@@ -3,17 +3,17 @@ from tkinter import filedialog
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
+import BehaviorStruct
 import PhotometryStruct
 from PhotometryStruct import PhotometryData
+from BehaviorStruct import BehaviorData
 
 root = tkinter.Tk()
 root.withdraw()
 
 #dictionary of events in Med-Pc timestamp data
-pulsedEvents = {"id_sessionStart": 1,
-             "id_sessionEnd": 2,
-             "id_recordingStart": 5,
-             "id_recordingStop": 6}
+pulsedEvents = {"id_sessionStart": 1, "id_sessionEnd": 2, "id_recordingStart": 5, "id_recordingStop": 6}
+DLCEvents = {"id_trialStart": 71, "id_cueAvers": 34, "id_cueAversHigh": 38, "id_cueNeutral": 36}
 
 def getFile():
     try:
@@ -34,26 +34,15 @@ def main():
     print("\n==Fiber Photometry Analysis for Pulsed Recordings==")
     print("Note: Currently, this program only accepts Doric Neuroscience Studio v5 type .xlsx files\n")
     #get path to .xlsx file
-    fpath = getFile()
+    fpath = None
     channel1 = None
     choice = None
     type = None
-    print("Select a paradigm to analyze (default = 1):")
-    print("1. Open Field")
-    while True:
-        val = input("> ")
-        if val == "1":
-            choice = 1
-            break
-        elif val == "":  #default option
-            choice = 1
-            break
-        else:
-            print("Incorrect input")
-
+    fpath = getFile()
     print("Select Recording Type (default = 1):")
     print("1. Continuous")
     print("2. Pulsed")
+    print("3. DeepLabCut Data Only")
     while True:
         val = input("> ")
         if val == "1" or val == "":
@@ -62,11 +51,66 @@ def main():
         elif val == "2":
             type = "pulsed"
             break
+        elif val == "3":
+            type = "DLC-only"
+            break
         else:
             print("Incorrect input")
 
-    #instantiate data structure
-    if choice == 1:
+    if type == "continuous" or type == "pulsed":
+        print("Select a paradigm to analyze (default = 1):")
+        print("1. Open Field")
+        while True:
+            val = input("> ")
+            if val == "1":
+                choice = 1
+                break
+            elif val == "":  #default option
+                choice = 1
+                break
+            else:
+                print("Incorrect input")
+
+    #DLC data only processing
+    if type == "DLC-only":
+        channel1 = BehaviorStruct.BehaviorData(id_eventsDict= DLCEvents)
+        channel1.readData(fpath)
+        channel1.clean()
+        channel1.alignEvents('Back1', baseline= 10, outcome= 10)
+
+        name = fpath.split("/")
+        saveDir = ""
+        saveDir = "/".join(name[0:len(name) - 1])
+        name = name[len(name) - 1].split(".")
+        name = name[0]
+
+        #plot results
+        print("Plotting aligned events...")
+        for key, value in channel1.dlc_alignedEvents.items():
+            plot = channel1.dlc_alignedEvents[key].plot(x="Time", y="Average", kind="line", figsize=(10, 5))
+            plot.set_title(key)
+            figPath = saveDir + "/" + key + ".png"
+            plt.savefig(figPath)
+        plt.show()
+
+        #save data
+        print("Saving processed and aligned data in .xlsx format...")
+
+        dest = saveDir + "/" + "DLC_All.xlsx"
+        writer = pd.ExcelWriter(dest, engine="xlsxwriter")
+        channel1.dlc_data.to_excel(writer, sheet_name="DLC_Data", index=True)
+        channel1.dlc_cleaned.to_excel(writer, sheet_name="DLC_Cleaned", index=True)
+        channel1.dlc_TTL.to_excel(writer, sheet_name="DLC-TTL", index=False)
+        writer.close()
+        dest = saveDir + "/" + "DLC_Aligned.xlsx"
+        writer = pd.ExcelWriter(dest, engine= 'xlsxwriter')
+        for key, value in channel1.dlc_alignedEvents.items():
+            sheetName = key + "_velocity"
+            value.to_excel(writer, sheet_name= sheetName, index= True)
+        writer.close()
+
+    #pulsed recordings
+    if choice == 1 and type != "DLC-only":
         channel1 = PhotometryStruct.PhotometryData(type= type, id_sessionStart= pulsedEvents["id_sessionStart"], id_sessionEnd= pulsedEvents["id_sessionEnd"])
         channel1.readData(fpath)
         channel1.clean()
@@ -76,7 +120,7 @@ def main():
         if type == "pulsed":
             channel1.binData()
 
-    if channel1 is not None:
+    if channel1 != None and type != "DLC-only":
         #plot results
         fig, axes = plt.subplots(2,2)
         channel1.cleanedptDf.plot(ax= axes[0,0], x="Time", y=["_465", "_405"], kind="line", figsize=(10, 5))

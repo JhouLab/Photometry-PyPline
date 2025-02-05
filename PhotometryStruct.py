@@ -15,9 +15,8 @@ class PhotometryData:
         self.pt_cleaned = None
         self.pt_binned = None
         self.pt_alignedEvents = {}
-        #behavioral data
+        #Med-Pc Data
         self.mpc_data = None
-        self.dlc_data = None
         #normaliztion constant, which is functionally the slope from the caluclated linear regression
         self.normConst = 0
         if type.upper() == "PULSED":
@@ -170,7 +169,7 @@ class PhotometryData:
             self.pt_cleaned["norm"] = self.pt_cleaned._465 / (self.pt_cleaned._405 - intercept)
             print(self.pt_cleaned)
 
-    #given a path to a .xlsx file, loads Med-Pc, Photometry, and DeeplabCut data into data structure
+    #given a path to a .xlsx file, loads Med-P and Photometry data into data structure
     def readData(self, fpath):
         rawData = None
         timestampData = None
