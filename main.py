@@ -3,7 +3,6 @@ from tkinter import filedialog
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
-
 import BehaviorStruct
 import PhotometryStruct
 from PhotometryStruct import PhotometryData
@@ -14,6 +13,7 @@ root.withdraw()
 
 #dictionary of events in Med-Pc timestamp data
 pulsedEvents = {"id_sessionStart": 1, "id_sessionEnd": 2, "id_recordingStart": 5, "id_recordingStop": 6}
+DLCEvents = {"id_trialStart": 71, "id_cueAvers": 34, "id_cueAversHigh": 38, "id_cueNeutral": 36}
 
 def getFile():
     try:
@@ -38,6 +38,7 @@ def main():
     channel1 = None
     choice = None
     type = None
+    fpath = getFile()
     print("Select Recording Type (default = 1):")
     print("1. Continuous")
     print("2. Pulsed")
@@ -46,15 +47,12 @@ def main():
         val = input("> ")
         if val == "1" or val == "":
             type = "continuous"
-            fpath = getFile()
             break
         elif val == "2":
             type = "pulsed"
-            fpath = getFile()
             break
         elif val == "3":
             type = "DLC-only"
-            fpath = getFile()
             break
         else:
             print("Incorrect input")
@@ -75,22 +73,40 @@ def main():
 
     #DLC data only processing
     if type == "DLC-only":
-        DLCEvents = {"id_trialStart": 71, "id_cueAvers": 34, "id_cueAversHigh": 38, "id_cueNeutral": 36}
         channel1 = BehaviorStruct.BehaviorData(id_eventsDict= DLCEvents)
         channel1.readData(fpath)
         channel1.clean()
         channel1.alignEvents('Back1', baseline= 10, outcome= 10)
 
+        name = fpath.split("/")
+        saveDir = ""
+        saveDir = "/".join(name[0:len(name) - 1])
+        name = name[len(name) - 1].split(".")
+        name = name[0]
+
+        #plot results
+        print("Plotting aligned events...")
+        for key, value in channel1.dlc_alignedEvents.items():
+            plot = channel1.dlc_alignedEvents[key].plot(x="Time", y="Average", kind="line", figsize=(10, 5))
+            plot.set_title(key)
+            figPath = saveDir + "/" + key + ".png"
+            plt.savefig(figPath)
+        plt.show()
+
+        #save data
         print("Saving processed and aligned data in .xlsx format...")
-        writer = pd.ExcelWriter("Test_All.xlsx", engine="xlsxwriter")
+
+        dest = saveDir + "/" + "DLC_All.xlsx"
+        writer = pd.ExcelWriter(dest, engine="xlsxwriter")
         channel1.dlc_data.to_excel(writer, sheet_name="DLC_Data", index=True)
         channel1.dlc_cleaned.to_excel(writer, sheet_name="DLC_Cleaned", index=True)
         channel1.dlc_TTL.to_excel(writer, sheet_name="DLC-TTL", index=False)
         writer.close()
-        writer = pd.ExcelWriter("Test_Aligned.xlsx", engine= 'xlsxwriter')
+        dest = saveDir + "/" + "DLC_Aligned.xlsx"
+        writer = pd.ExcelWriter(dest, engine= 'xlsxwriter')
         for key, value in channel1.dlc_alignedEvents.items():
-            sName = key + "_velocity"
-            value.to_excel(writer, sheet_name= sName, index= True)
+            sheetName = key + "_velocity"
+            value.to_excel(writer, sheet_name= sheetName, index= True)
         writer.close()
 
     #pulsed recordings

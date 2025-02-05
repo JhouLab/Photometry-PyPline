@@ -43,9 +43,14 @@ class BehaviorData:
             trace.reset_index(drop=True, inplace=True)
             df[y] = trace
 
+        #take SD
+        df['SD'] = df.std(axis=1, skipna=True)
         #take row average
         df['Average'] = df.mean(axis=1, skipna=True)
-        df['SD'] = df.std(axis=1, skipna=True)
+        mov = np.convolve(df['Average'], np.ones(10), 'valid') / 10
+        # first 5 and last 5 samples cannot be calculated, so pad array so that dimensions fit with existing data
+        mov = np.concatenate([[np.nan, np.nan, np.nan, np.nan, np.nan], mov, [np.nan, np.nan, np.nan, np.nan]])
+        df['Average'] = mov
         #reindex dataframe so times are event centric
         time = np.linspace(0 - baseline, 0 + outcome, df.shape[0])
         df['Time'] = time
@@ -82,7 +87,7 @@ class BehaviorData:
                 print("Processing event", eventName, "...")
                 self.dlc_alignedEvents[eventName] = self.processEvent(value, part, baseline, outcome)
 
-    def calcVel(self, df, movingAverage = False):
+    def calcVel(self, df, movingAverage = False, threshold = 100):
         vel = np.array([])
         vel = np.append(vel, 0)
         for x in range(1, int(df.shape[0])):
@@ -91,7 +96,11 @@ class BehaviorData:
             else:
                 #calculate euclidian distance
                 dist = math.dist((df.iloc[x-1, 0] , df.iloc[x-1, 1]), (df.iloc[x,0] , df.iloc[x, 1]))
-                vel = np.append(vel, dist)
+                #if velocity is greater than a threshold value, make NA as it is a putative outlier
+                if dist >= threshold:
+                    vel = np.append(vel, np.nan)
+                else:
+                    vel = np.append(vel, dist)
 
         #calculate moving average for a 10 sample windwow
         if movingAverage == True:
@@ -131,6 +140,7 @@ class BehaviorData:
         self.dlc_TTL.columns = ['onset', 'offset']
 
     def readData(self, fpath):
+        print("Reading data...")
         timestampData = None
         DLCData = None
         DLCFrames = None
