@@ -11,6 +11,7 @@ class BehaviorData:
         self.dlc_TTL = None
         self.dlc_cleaned = None
         self.dlc_alignedEvents = {}
+        self.dlc_stats = {}
         #events
         self.id_events = id_eventsDict
         #labeling confidence threshold
@@ -68,39 +69,42 @@ class BehaviorData:
 
     #aligns segment of data to each type of event using the id_eventsDict
     def alignEvents(self, part, baseline = 10, outcome = 10):
-        print("Aligning DLC positional data to Med-Pc timestamps...")
-        if len(self.id_events) < 1:
-            print("Error: No dictionary of events provided. Cannot align events.")
+        if self.dlc_cleaned is None:
+            print("Error: Cannot align events if data has not been cleaned")
         else:
-            #Calculate offsets of each TLL pulse detected by camera compared to each TrialStart
-            MPC = self.getMPCTimes(self.id_events.get("id_trialStart"))
-            for x in range(len(MPC)):
-                closest = self.dlc_TTL.sub(MPC[x]).abs().idxmin()
-                closest = closest['onset']
-                offset = self.dlc_TTL.at[closest, 'onset'] - MPC[x]
-                self.dlc_TTL.at[closest, 'offset_MPC'] = offset
+            print("Aligning DLC positional data to Med-Pc timestamps...")
+            if len(self.id_events) < 1:
+                print("Error: No dictionary of events provided. Cannot align events.")
+            else:
+                #Calculate offsets of each TLL pulse detected by camera compared to each TrialStart
+                MPC = self.getMPCTimes(self.id_events.get("id_trialStart"))
+                for x in range(len(MPC)):
+                    closest = self.dlc_TTL.sub(MPC[x]).abs().idxmin()
+                    closest = closest['onset']
+                    offset = self.dlc_TTL.at[closest, 'onset'] - MPC[x]
+                    self.dlc_TTL.at[closest, 'offset_MPC'] = offset
 
-            #loop though event dictionary to process each event, using TTL offsets to align animal velocity
-            for key, value in self.id_events.items():
-                eventName = key.split("_")
-                eventName = eventName[1]
-                print("Processing event", eventName, "...")
-                self.dlc_alignedEvents[eventName] = self.processEvent(value, part, baseline, outcome)
+                #loop though event dictionary to process each event, using TTL offsets to align animal velocity
+                for key, value in self.id_events.items():
+                    eventName = key.split("_")
+                    eventName = eventName[1]
+                    print("Processing event", eventName, "...")
+                    self.dlc_alignedEvents[eventName] = self.processEvent(value, part, baseline, outcome)
 
     def calcVel(self, df, movingAverage = False, threshold = 100):
         vel = np.array([])
         vel = np.append(vel, 0)
+        locomotion = float(0)
         for x in range(1, int(df.shape[0])):
-            if df.iloc[x, 0] is None or df.iloc[x, 1] is None:
+            #calculate euclidian distance
+            dist = math.dist((df.iloc[x-1, 0] , df.iloc[x-1, 1]), (df.iloc[x,0] , df.iloc[x, 1]))
+            #if velocity is greater than a threshold value, make NA as it is a putative outlier
+            if dist >= threshold:
                 vel = np.append(vel, np.nan)
             else:
-                #calculate euclidian distance
-                dist = math.dist((df.iloc[x-1, 0] , df.iloc[x-1, 1]), (df.iloc[x,0] , df.iloc[x, 1]))
-                #if velocity is greater than a threshold value, make NA as it is a putative outlier
-                if dist >= threshold:
-                    vel = np.append(vel, np.nan)
-                else:
-                    vel = np.append(vel, dist)
+                if np.isnan(dist) is False or math.isnan(dist) is False:
+                    locomotion = locomotion + dist
+                vel = np.append(vel, dist)
 
         #calculate moving average for a 10 sample windwow
         if movingAverage == True:
@@ -108,9 +112,9 @@ class BehaviorData:
             test = np.convolve(vel, np.ones(10), 'valid') / 10
             #first 5 and last 5 samples cannot be calculated, so pad array so that dimensions fit with existing data
             test = np.concatenate([[0, 0, 0, 0, 0], test, [0,0,0,0,0]])
-            return test
+            return test, locomotion
         else:
-            return vel
+            return vel, locomotion
 
 
 
@@ -127,10 +131,12 @@ class BehaviorData:
             tmp = tmp.where(tmp.iloc[:, 2] >= self.threshold)
             pName = tmp.columns[0].split("_")
             pName = pName[0]
+            dictName = pName + "_Total_Locomotion"
             pName = pName + "_Vel"
-            #calculate velocity
-            tmp[pName] = self.calcVel(tmp)
+            #calculate velocity and total locomotion
+            tmp[pName], total = self.calcVel(tmp)
             self.dlc_cleaned = pd.concat([self.dlc_cleaned, tmp], axis=1)
+            self.dlc_stats[dictName] = total
 
         #drop first placeholder column
         self.dlc_cleaned = self.dlc_cleaned.iloc[:, 1:]
@@ -138,6 +144,8 @@ class BehaviorData:
 
         #rename DLC-TTL data columns
         self.dlc_TTL.columns = ['onset', 'offset']
+
+        print(self.dlc_stats)
 
     def readData(self, fpath):
         print("Reading data...")

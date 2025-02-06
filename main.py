@@ -76,7 +76,7 @@ def main():
         channel1 = BehaviorStruct.BehaviorData(id_eventsDict= DLCEvents)
         channel1.readData(fpath)
         channel1.clean()
-        channel1.alignEvents('Back1', baseline= 10, outcome= 10)
+        channel1.alignEvents(part= 'Back1', baseline= 10, outcome= 10)
 
         name = fpath.split("/")
         saveDir = ""
@@ -89,19 +89,23 @@ def main():
         for key, value in channel1.dlc_alignedEvents.items():
             plot = channel1.dlc_alignedEvents[key].plot(x="Time", y="Average", kind="line", figsize=(10, 5))
             plot.set_title(key)
-            figPath = saveDir + "/" + key + ".png"
+            figPath = saveDir + "/" + key + "_DLC" + ".png"
             plt.savefig(figPath)
         plt.show()
 
         #save data
         print("Saving processed and aligned data in .xlsx format...")
-
+        stats = pd.Series(channel1.dlc_stats, name="Statistics")
+        #save all DLC data
         dest = saveDir + "/" + "DLC_All.xlsx"
         writer = pd.ExcelWriter(dest, engine="xlsxwriter")
+        stats.to_excel(writer, sheet_name="Statistics", index=True)
         channel1.dlc_data.to_excel(writer, sheet_name="DLC_Data", index=True)
         channel1.dlc_cleaned.to_excel(writer, sheet_name="DLC_Cleaned", index=True)
         channel1.dlc_TTL.to_excel(writer, sheet_name="DLC-TTL", index=False)
         writer.close()
+
+        #save aligned events as a separate spreadsheet
         dest = saveDir + "/" + "DLC_Aligned.xlsx"
         writer = pd.ExcelWriter(dest, engine= 'xlsxwriter')
         for key, value in channel1.dlc_alignedEvents.items():
