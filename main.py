@@ -7,7 +7,8 @@ import BehaviorStruct
 import PhotometryStruct
 
 #dictionary of events in Med-Pc timestamp data
-pulsedEvents = {"id_sessionStart": 1, "id_sessionEnd": 2, "id_recordingStart": 5, "id_recordingStop": 6}
+pulsedEvents_openField = {"id_sessionStart": 1, "id_sessionEnd": 2, "id_recordingStart": 5, "id_recordingStop": 6}
+events_openField = {"id_sessionStart": 1, "id_sessionEnd": 2}
 DLCEvents = {"id_trialStart": 71, "id_cueAvers": 34, "id_cueAversHigh": 38, "id_cueNeutral": 36}
 
 def main():
@@ -23,6 +24,7 @@ def main():
     fpath = filedialog.askopenfilename(parent=root, initialdir=currdir,
                               title='Please select a data file',
                               filetypes=[("Excel file", "*.xlsx")])
+    print("You chose:", fpath, "\n")
 
     print("Select Recording Type (default = 1):")
     print("1. Continuous")
@@ -45,10 +47,14 @@ def main():
     if type == "continuous" or type == "pulsed":
         print("Select a paradigm to analyze (default = 1):")
         print("1. Open Field")
+        print("2. Tonic Recording")
         while True:
             val = input("> ")
             if val == "1":
                 choice = 1
+                break
+            if val == "2":
+                choice = 2
                 break
             elif val == "":  #default option
                 choice = 1
@@ -111,10 +117,9 @@ def main():
         #show plots
         plt.show()
 
-    #pulsed recordings
-    if choice == 1 and type != "DLC-only":
-        fpath = getFile(False)
-        channel1 = PhotometryStruct.PhotometryData(type= type, id_sessionStart= pulsedEvents["id_sessionStart"], id_sessionEnd= pulsedEvents["id_sessionEnd"])
+    #pulsed, open field
+    if type == "pulsed" and choice == 1 and type != "DLC-only":
+        channel1 = PhotometryStruct.PhotometryData(type= type, id_eventsDict=pulsedEvents_openField)
         channel1.readData(fpath)
         channel1.clean()
 
@@ -123,17 +128,24 @@ def main():
         if type == "pulsed":
             channel1.binData()
 
+    #continuous, tonic recording
+    if type == "continuous" and choice == 2 and type != "DLC-only":
+        print("Processing continuous tonic recording...")
+        channel1 = PhotometryStruct.PhotometryData(type= type, id_eventsDict= events_openField)
+        channel1.readData(fpath)
+        channel1.clean()
+
     if channel1 != None and type != "DLC-only":
         #plot results
         fig, axes = plt.subplots(2,2)
-        channel1.cleanedptDf.plot(ax= axes[0,0], x="Time", y=["_465", "_405"], kind="line", figsize=(10, 5))
+        channel1.pt_cleaned.plot(ax= axes[0,0], x="Time", y=["_465", "_405"], kind="line", figsize=(10, 5))
         axes[0,0].set_title("Raw Data")
         axes[0,0].set_ylabel("Current")
-        channel1.cleanedptDf.plot(ax = axes[0,1], x="Time", y=["norm"], kind="line", figsize=(10, 5))
+        channel1.pt_cleaned.plot(ax = axes[0,1], x="Time", y=["norm"], kind="line", figsize=(10, 5))
         axes[0,1].set_title("Normalized")
         axes[0,1].set_ylabel("f/f")
         if type == "pulsed":
-            channel1.binnedPtDf.plot(ax = axes[1,0], x="Time", y=["norm"], kind="line", figsize=(10, 5))
+            channel1.pt_cleaned.plot(ax = axes[1,0], x="Time", y=["norm"], kind="line", figsize=(10, 5))
             axes[1,0].set_title("Binned and Normalized")
             axes[1,0].set_ylabel("f/f")
         fig.tight_layout()
@@ -147,15 +159,15 @@ def main():
         #save plots and data
         plt.savefig(figName)
         writer = pd.ExcelWriter(excelName, engine="xlsxwriter")
-        channel1.cleanedptDf.to_excel(writer, sheet_name="Data", index=False)
+        channel1.pt_cleaned.to_excel(writer, sheet_name="Data", index=False)
         if type == "pulsed":
-            channel1.binnedPtDf.to_excel(writer, sheet_name="Binned Data", index=False)
-        if channel1.mpcDf is not None:
-            channel1.mpcDf.to_excel(writer, sheet_name="Med-Pc", index=False)
+            channel1.pt_cleaned.to_excel(writer, sheet_name="Binned Data", index=False)
+        if channel1.mpc_data is not None:
+            channel1.mpc_data.to_excel(writer, sheet_name="Med-Pc", index=False)
         writer.close()
 
         #scatter plot of 465 vs 405 data
-        channel1.photometryDf.plot(x="_405", y="_465", c="Time", kind="scatter", colormap="viridis")
+        channel1.pt_raw.plot(x="_405", y="_465", c="Time", kind="scatter", colormap="viridis")
         #save graph
         figName = name + "_Scatter.png"
         plt.savefig(figName)
