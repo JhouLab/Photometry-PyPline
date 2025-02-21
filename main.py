@@ -1,44 +1,29 @@
+import os
 import tkinter
 from tkinter import filedialog
-import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import BehaviorStruct
 import PhotometryStruct
-from PhotometryStruct import PhotometryData
-from BehaviorStruct import BehaviorData
-
-root = tkinter.Tk()
-root.withdraw()
 
 #dictionary of events in Med-Pc timestamp data
 pulsedEvents = {"id_sessionStart": 1, "id_sessionEnd": 2, "id_recordingStart": 5, "id_recordingStop": 6}
 DLCEvents = {"id_trialStart": 71, "id_cueAvers": 34, "id_cueAversHigh": 38, "id_cueNeutral": 36}
 
-def getFile():
-    try:
-        currdir = os.getcwd()
-        tempdir = filedialog.askopenfilename(parent=root, initialdir=currdir,
-                                             title='Please select photometry data file',
-                                             filetypes=[('Excel', '*.xlsx')])
-        if len(tempdir) > 0:
-            print("You chose: %s" % tempdir)
-        else:
-            raise Exception("Error: No file was selected")
-    except:
-        tempdir = getFile()
-    return tempdir
-
-
 def main():
+    root = tkinter.Tk()
+    root.withdraw()
     print("\n==Fiber Photometry Analysis for Pulsed Recordings==")
     print("Note: Currently, this program only accepts Doric Neuroscience Studio v5 type .xlsx files\n")
-    #get path to .xlsx file
-    fpath = None
     channel1 = None
     choice = None
     type = None
-    fpath = getFile()
+    currdir = os.getcwd()
+    #get path to .xlsx file
+    fpath = filedialog.askopenfilename(parent=root, initialdir=currdir,
+                              title='Please select a data file',
+                              filetypes=[("Excel file", "*.xlsx")])
+
     print("Select Recording Type (default = 1):")
     print("1. Continuous")
     print("2. Pulsed")
@@ -73,7 +58,13 @@ def main():
 
     #DLC data only processing
     if type == "DLC-only":
-        channel1 = BehaviorStruct.BehaviorData(id_eventsDict= DLCEvents)
+        root.deiconify()
+        # get path to video
+        vpath = filedialog.askopenfilename(parent=root, initialdir=currdir,
+                                           title='Please select a video file',
+                                           filetypes=[("Video File", "*.avi")])
+        root.withdraw()
+        channel1 = BehaviorStruct.BehaviorData(id_eventsDict= DLCEvents, videoPath = vpath)
         channel1.readData(fpath)
         channel1.clean()
         channel1.alignEvents(part= 'Back1', baseline= 10, outcome= 10)
@@ -85,13 +76,17 @@ def main():
         name = name[0]
 
         #plot results
+        print("Plotting total locomotion...")
+        plot = channel1.dlc_cleaned.plot(x="Time", y="Back1_Vel", kind="line", figsize=(10,5))
+        plot.set_title("Back1")
+        plt.savefig(saveDir + "/" + "Back1_DLC.png")
+        plt.savefig(saveDir + "/" + "Back1_DLC.png")
         print("Plotting aligned events...")
         for key, value in channel1.dlc_alignedEvents.items():
             plot = channel1.dlc_alignedEvents[key].plot(x="Time", y="Average", kind="line", figsize=(10, 5))
             plot.set_title(key)
-            figPath = saveDir + "/" + key + "_DLC" + ".png"
+            figPath = saveDir + "/" + key + "_DLC.png"
             plt.savefig(figPath)
-        plt.show()
 
         #save data
         print("Saving processed and aligned data in .xlsx format...")
@@ -113,8 +108,12 @@ def main():
             value.to_excel(writer, sheet_name= sheetName, index= True)
         writer.close()
 
+        #show plots
+        plt.show()
+
     #pulsed recordings
     if choice == 1 and type != "DLC-only":
+        fpath = getFile(False)
         channel1 = PhotometryStruct.PhotometryData(type= type, id_sessionStart= pulsedEvents["id_sessionStart"], id_sessionEnd= pulsedEvents["id_sessionEnd"])
         channel1.readData(fpath)
         channel1.clean()

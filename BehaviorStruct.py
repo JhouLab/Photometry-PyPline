@@ -2,9 +2,10 @@ import numpy as np
 import pandas as pd
 import openpyxl
 import math
+import cv2
 
 class BehaviorData:
-    def __init__(self, id_eventsDict = {}, mpcDF = None, dlcData = None, threshold = 0.6, fps = 30):
+    def __init__(self, id_eventsDict = {}, mpcDF = None, dlcData = None, threshold = 0.6, videoPath = None):
         #dataframes
         self.mpc_data = mpcDF
         self.dlc_data = dlcData
@@ -16,8 +17,21 @@ class BehaviorData:
         self.id_events = id_eventsDict
         #labeling confidence threshold
         self.threshold = threshold
-        #fps of recording
-        self.fps = fps
+
+        #fps and path to .avi file
+        self.videoPath = videoPath
+        self.fps = None
+        self.trueFrames = None
+        self.videoLength = None
+
+        if self.videoPath is not None:
+            video = cv2.VideoCapture(self.videoPath)
+            self.trueFrames = video.get(cv2.CAP_PROP_FRAME_COUNT)
+            self.fps = video.get(cv2.CAP_PROP_FPS)
+            self.videoLength = self.trueFrames / self.fps
+            self.dlc_stats['True_FPS'] = self.fps
+            self.dlc_stats['cv2_Video_Length'] = self.videoLength
+            print("Detected video with", self.trueFrames, "frames recorded at", self.fps, "fps")
 
     #Given an eventID int, part name string, baseline interval int, and outcome int.
     #Align trace of data to closest trialstart TTL timestamp and apply the pre-calculated offset compared to MED-Pc timestamp.
@@ -119,33 +133,42 @@ class BehaviorData:
 
 
     def clean(self):
-        print("Cleaning DLC data...")
-        #rename columns in original dataframe
-        self.dlc_data.columns = (self.dlc_data.iloc[0] + '_' + self.dlc_data.iloc[1])
-        self.dlc_data = self.dlc_data.iloc[2:].reset_index(drop=True)
-        #process each part independently, and remove coordinate pairs which fall below confidence threshold
-        self.dlc_cleaned = self.dlc_data[["Nose_x"]]
-        for x in range(0, int(self.dlc_data.shape[1]) - 1, 3):
-            tmp = self.dlc_data.iloc[:, x:x+3]
-            #set points where labeling is not above threshold to nan
-            tmp = tmp.where(tmp.iloc[:, 2] >= self.threshold)
-            pName = tmp.columns[0].split("_")
-            pName = pName[0]
-            dictName = pName + "_Total_Locomotion"
-            pName = pName + "_Vel"
-            #calculate velocity and total locomotion
-            tmp[pName], total = self.calcVel(tmp)
-            self.dlc_cleaned = pd.concat([self.dlc_cleaned, tmp], axis=1)
-            self.dlc_stats[dictName] = total
+        if self.videoPath is None or self.trueFrames is None or self.fps is None:
+            print("Error: no video file was passed. Cannot process DLC data without accurate fps")
+        else:
+            print("Cleaning DLC data...")
+            #rename columns in original dataframe
+            self.dlc_data.columns = (self.dlc_data.iloc[0] + '_' + self.dlc_data.iloc[1])
+            self.dlc_data = self.dlc_data.iloc[2:].reset_index(drop=True)
+            #process each part independently, and remove coordinate pairs which fall below confidence threshold
+            self.dlc_cleaned = self.dlc_data[["Nose_x"]]
+            for x in range(0, int(self.dlc_data.shape[1]) - 1, 3):
+                tmp = self.dlc_data.iloc[:, x:x+3]
+                #set points where labeling is not above threshold to nan
+                tmp = tmp.where(tmp.iloc[:, 2] >= self.threshold)
+                pName = tmp.columns[0].split("_")
+                pName = pName[0]
+                dictName = pName + "_Total_Locomotion"
+                pName = pName + "_Vel"
+                #calculate velocity and total locomotion
+                tmp[pName], total = self.calcVel(tmp)
+                self.dlc_cleaned = pd.concat([self.dlc_cleaned, tmp], axis=1)
+                self.dlc_stats[dictName] = total
 
-        #drop first placeholder column
-        self.dlc_cleaned = self.dlc_cleaned.iloc[:, 1:]
-        self.dlc_cleaned['Time'] = np.round(self.dlc_data.index / self.fps, 2)
+            #drop first placeholder column
+            self.dlc_cleaned = self.dlc_cleaned.iloc[:, 1:]
+            #caluclate fps from video file to produce accurate timestamps
+            self.dlc_cleaned['Time'] = self.dlc_data.index / self.fps
 
-        #rename DLC-TTL data columns
-        self.dlc_TTL.columns = ['onset', 'offset']
+            if int(self.dlc_cleaned.shape[0]) != self.trueFrames:
+                print("Error: cleaned DLC data contains", int(self.dlc_cleaned.shape[0]), "frames while cv2 reports", self.trueFrames, ". Is this the correct video and DLC file?")
+            else:
+                print("Confirmed detected number of frames matches amount of DLC data...")
 
-        print(self.dlc_stats)
+            #rename DLC-TTL data columns
+            self.dlc_TTL.columns = ['onset', 'offset']
+
+            print(self.dlc_stats)
 
     def readData(self, fpath):
         print("Reading data...")
