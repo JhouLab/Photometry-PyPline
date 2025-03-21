@@ -5,17 +5,19 @@ import math
 import cv2
 
 class BehaviorData:
-    def __init__(self, id_eventsDict = {}, mpcDF = None, dlcData = None, threshold = 0.6, videoPath = None):
+    def __init__(self, id_eventsDict = {}, mpcDF = None, behaviorData = None, threshold = 0.6, videoPath = None):
         #dataframes
         self.mpc_data = mpcDF
-        self.dlc_data = dlcData
-        self.dlc_TTL = None
-        self.dlc_cleaned = None
-        self.dlc_alignedEvents = {}
-        self.dlc_stats = {}
+        self.beh_data = behaviorData
+        self.beh_TTL = None
+        self.beh_cleaned = None
+        self.beh_stats = {}
+
         #events
         self.id_events = id_eventsDict
-        #labeling confidence threshold
+        self.beh_alignedEvents = {}
+
+        #labeling confidence threshold for DLC data types
         self.threshold = threshold
 
         #fps and path to .avi file
@@ -23,14 +25,15 @@ class BehaviorData:
         self.fps = None
         self.trueFrames = None
         self.videoLength = None
+        self.type = None
 
         if self.videoPath is not None:
             video = cv2.VideoCapture(self.videoPath)
             self.trueFrames = video.get(cv2.CAP_PROP_FRAME_COUNT)
             self.fps = video.get(cv2.CAP_PROP_FPS)
             self.videoLength = self.trueFrames / self.fps
-            self.dlc_stats['True_FPS'] = self.fps
-            self.dlc_stats['cv2_Video_Length'] = self.videoLength
+            self.beh_stats['True_FPS'] = self.fps
+            self.beh_stats['cv2_Video_Length'] = self.videoLength
             print("Detected video with", self.trueFrames, "frames recorded at", self.fps, "fps")
 
     #Given an eventID int, part name string, baseline interval int, and outcome int.
@@ -40,21 +43,21 @@ class BehaviorData:
         # get the timestamps for each event with passed ID
         events = self.getMPCTimes(eventID)
         df = pd.DataFrame()
-        pName = part + "_Vel"
+
         for y in range(len(events)):
             # find closest DLC-TTL event to behavioral event
             # these are the trail start TTls - they should be approximate to each event
-            closest = self.dlc_TTL.sub(events[y]).abs().idxmin()
+            closest = self.beh_TTL.sub(events[y]).abs().idxmin()
             closest = closest['onset']
-            offset = self.dlc_TTL.at[closest, 'offset_MPC']
+            offset = self.beh_TTL.at[closest, 'offset_MPC']
             tMin = events[y] - baseline + offset
             tMax = events[y] + outcome + offset
 
             #find closest timepoints in DLC data to start and stop times
-            min = self.dlc_cleaned['Time'].sub(tMin).abs().idxmin()
-            max = self.dlc_cleaned['Time'].sub(tMax).abs().idxmin()
+            min = self.beh_cleaned['Time'].sub(tMin).abs().idxmin()
+            max = self.beh_cleaned['Time'].sub(tMax).abs().idxmin()
 
-            trace = self.dlc_cleaned.iloc[min:max][pName]
+            trace = self.beh_cleaned.iloc[min:max][part]
             trace.reset_index(drop=True, inplace=True)
             df[y] = trace
 
@@ -83,7 +86,7 @@ class BehaviorData:
 
     #aligns segment of data to each type of event using the id_eventsDict
     def alignEvents(self, part, baseline = 10, outcome = 10):
-        if self.dlc_cleaned is None:
+        if self.beh_cleaned is None:
             print("Error: Cannot align events if data has not been cleaned")
         else:
             print("Aligning DLC positional data to Med-Pc timestamps...")
@@ -93,17 +96,17 @@ class BehaviorData:
                 #Calculate offsets of each TLL pulse detected by camera compared to each TrialStart
                 MPC = self.getMPCTimes(self.id_events.get("id_trialStart"))
                 for x in range(len(MPC)):
-                    closest = self.dlc_TTL.sub(MPC[x]).abs().idxmin()
+                    closest = self.beh_TTL.sub(MPC[x]).abs().idxmin()
                     closest = closest['onset']
-                    offset = self.dlc_TTL.at[closest, 'onset'] - MPC[x]
-                    self.dlc_TTL.at[closest, 'offset_MPC'] = offset
+                    offset = self.beh_TTL.at[closest, 'onset'] - MPC[x]
+                    self.beh_TTL.at[closest, 'offset_MPC'] = offset
 
                 #loop though event dictionary to process each event, using TTL offsets to align animal velocity
                 for key, value in self.id_events.items():
                     eventName = key.split("_")
                     eventName = eventName[1]
                     print("Processing event", eventName, "...")
-                    self.dlc_alignedEvents[eventName] = self.processEvent(value, part, baseline, outcome)
+                    self.beh_alignedEvents[eventName] = self.processEvent(value, part, baseline, outcome)
 
     def calcVel(self, df, movingAverage = False, threshold = 100):
         vel = np.array([])
@@ -134,41 +137,69 @@ class BehaviorData:
 
     def clean(self):
         if self.videoPath is None or self.trueFrames is None or self.fps is None:
-            print("Error: no video file was passed. Cannot process DLC data without accurate fps")
+            print("Error: no video file was passed. Cannot process behavioral data without accurate fps")
         else:
-            print("Cleaning DLC data...")
-            #rename columns in original dataframe
-            self.dlc_data.columns = (self.dlc_data.iloc[0] + '_' + self.dlc_data.iloc[1])
-            self.dlc_data = self.dlc_data.iloc[2:].reset_index(drop=True)
-            #process each part independently, and remove coordinate pairs which fall below confidence threshold
-            self.dlc_cleaned = self.dlc_data[["Nose_x"]]
-            for x in range(0, int(self.dlc_data.shape[1]) - 1, 3):
-                tmp = self.dlc_data.iloc[:, x:x+3]
-                #set points where labeling is not above threshold to nan
-                tmp = tmp.where(tmp.iloc[:, 2] >= self.threshold)
-                pName = tmp.columns[0].split("_")
-                pName = pName[0]
-                dictName = pName + "_Total_Locomotion"
-                pName = pName + "_Vel"
-                #calculate velocity and total locomotion
-                tmp[pName], total = self.calcVel(tmp)
-                self.dlc_cleaned = pd.concat([self.dlc_cleaned, tmp], axis=1)
-                self.dlc_stats[dictName] = total
+            #check what type of behavioral data has been passed
+            #current types checked for: DeepLabCut, ezTrack Location Analysis, ezTrack Freezing Analysis
+            test = self.beh_data.columns[0]
+            if test == "File":
+                if "Freezing" in self.beh_data.columns:
+                    self.type = "ezt_freezing"
+                    print("Detected ezTrack freezing data")
+                    #remove redundent columns
+                    self.beh_cleaned = self.beh_data.iloc[:,5:]
+                    self.beh_cleaned["Freezing"] = self.beh_cleaned["Freezing"] / 100
+                    self.beh_cleaned["Freezing"] = self.beh_cleaned["Freezing"].astype(int)
 
-            #drop first placeholder column
-            self.dlc_cleaned = self.dlc_cleaned.iloc[:, 1:]
+                elif "X" in self.beh_data.columns:
+                    self.type = "ezt_location"
+                    print("Detected ezTrack location data")
+                    # remove redundent columns
+                    self.beh_cleaned = self.beh_data.iloc[:,7:]
+                else:
+                    print("Error: Detected ezTrack style data but could not identify the type...")
+
+            elif test == "scorer":
+                self.type = "dlc_location"
+                print("Detected Deeplabcut data...")
+                #remove existing headers
+                newHeaders = self.beh_data.iloc[0]
+                self.beh_data = self.beh_data[1:]
+                self.beh_data.columns = newHeaders
+                #rename columns in original dataframe
+                self.beh_data.columns = (self.beh_data.iloc[0] + '_' + self.beh_data.iloc[1])
+                self.beh_data = self.beh_data.iloc[2:].reset_index(drop=True)
+                #process each part independently, and remove coordinate pairs which fall below confidence threshold
+                self.beh_cleaned = self.beh_data[["Nose_x"]]
+                for x in range(0, int(self.beh_data.shape[1]) - 1, 3):
+                    tmp = self.beh_data.iloc[:, x:x+3]
+                    #set points where labeling is not above threshold to nan
+                    tmp = tmp.where(tmp.iloc[:, 2] >= self.threshold)
+                    pName = tmp.columns[0].split("_")
+                    pName = pName[0]
+                    dictName = pName + "_Total_Locomotion"
+                    pName = pName + "_Vel"
+                    #calculate velocity and total locomotion
+                    tmp[pName], total = self.calcVel(tmp)
+                    self.beh_cleaned = pd.concat([self.beh_cleaned, tmp], axis=1)
+                    self.beh_stats[dictName] = total
+
+                #drop first placeholder column
+                self.beh_cleaned = self.beh_cleaned.iloc[:, 1:]
+
+
             #caluclate fps from video file to produce accurate timestamps
-            self.dlc_cleaned['Time'] = self.dlc_data.index / self.fps
+            self.beh_cleaned['Time'] = self.beh_data.index / self.fps
 
-            if int(self.dlc_cleaned.shape[0]) != self.trueFrames:
-                print("Error: cleaned DLC data contains", int(self.dlc_cleaned.shape[0]), "frames while cv2 reports", self.trueFrames, ". Is this the correct video and DLC file?")
+            if int(self.beh_cleaned.shape[0]) != self.trueFrames:
+                print("Error: cleaned behavioral data contains", int(self.beh_cleaned.shape[0]), "frames while cv2 reports", self.trueFrames, ". Is this the correct video and behavioral data?")
             else:
-                print("Confirmed detected number of frames matches amount of DLC data...")
+                print("Confirmed detected number of frames matches amount in behavioral data...")
 
             #rename DLC-TTL data columns
-            self.dlc_TTL.columns = ['onset', 'offset']
+            self.beh_TTL.columns = ['onset', 'offset']
 
-            print(self.dlc_stats)
+            print(self.beh_stats)
 
     def readData(self, fpath):
         print("Reading data...")
@@ -181,18 +212,19 @@ class BehaviorData:
         except:
             print("Warning: Could not find Med-Pc data in file. Is there an excel tab labeled 'Med-Pc'?")
 
-        #look for DLC Data
+        #look for behavior data
+        #ALWAYS ASSUME IT IS THE FIRST SHEET
         try:
-            DLCData = pd.read_excel(fpath, sheet_name="DLC", header=0, index_col=0)
+            DLCData = pd.read_excel(fpath, sheet_name=0, header=0)
         except:
-            print("Warning: Could not find DeepLabCut data. Is there an excel tab labeled 'DLC'?")
+            print("Warning: Could not find behavioral data. Is there an excel tab labeled 'Behavior'?")
 
         # look for DLC Data
         try:
-            DLCTTL = pd.read_excel(fpath, sheet_name="DLC-TTL", header=0, index_col=0)
+            DLCTTL = pd.read_excel(fpath, sheet_name="Behavior-TTL", header=0, index_col=0)
         except:
-            print("Warning: Could not find DeepLabCut Recording TTL timestamps. Is there an excel tab labeled 'DLC-TTL'?")
+            print("Warning: Could not find behavioral recording TTL timestamps. Is there an excel tab labeled 'Behavioral-TTL'?")
 
         self.mpc_data = timestampData
-        self.dlc_data = DLCData
-        self.dlc_TTL = DLCTTL
+        self.beh_data = DLCData
+        self.beh_TTL = DLCTTL

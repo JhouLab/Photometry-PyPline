@@ -4,11 +4,10 @@ import math
 
 
 class PhotometryData:
-    def __init__(self, type="continuous", autoFlProfile=0, cutoff=0.009, id_eventsDict = {}):
+    def __init__(self, type="CONTINUOUS", autoFlProfile=0, cutoff=0.009, id_eventsDict = {}):
         self.autoFlProfile = autoFlProfile
-        #threshold value which we remove samples under (these are samples which the laser was not active for)
+        #threshold value which we remove samples under (these are samples which the laser was not active for in pulsed recordings)
         self.cutoff = cutoff
-        self.id_events = id_eventsDict
         #photometry data
         self.pt_raw = None
         self.pt_cleaned = None
@@ -17,6 +16,8 @@ class PhotometryData:
         self.numChan = 1
         #Med-Pc Data
         self.mpc_data = None
+        #dictonary of ID ints for Med-Pc Events
+        self.id_events = id_eventsDict
         #normaliztion constant, which is functionally the slope from the caluclated linear regression
         self.normConst = 0
         if type.upper() == "PULSED":
@@ -168,7 +169,7 @@ class PhotometryData:
             self.cleaned = True
 
     #Normalizes cleaned photometry data
-    def normalize(self, numSamples = 20):
+    def normalize(self, numSamples = 20, useIntercept = False):
         if self.pt_cleaned is None:
             raise UserWarning("This data has not been cleaned. Please run clean() before proceeding.")
         else:
@@ -188,6 +189,9 @@ class PhotometryData:
             #add contribution of autofluorescence
             self.normConst = intercept
             intercept += self.autoFlProfile
+
+            if useIntercept == False:
+                intercept = 0
 
             self.pt_cleaned["norm"] = self.pt_cleaned._465 / (self.pt_cleaned._405 - intercept)
             print(self.pt_cleaned)
