@@ -1,49 +1,52 @@
 import pandas as pd
 import openpyxl
+import math
 
 
 class PhotometryData:
-    def __init__(self, type="pulsed", autoFlProfile=0, cutoff=0.009, id_eventsDict = {}, id_sessionStart=1, id_sessionEnd=2):
+    def __init__(self, type="CONTINUOUS", autoFlProfile=0, cutoff=0.009, id_eventsDict = {}):
         self.autoFlProfile = autoFlProfile
-        #threshold value which we remove samples under (these are samples which the laser was not active for)
+        #threshold value which we remove samples under (these are samples which the laser was not active for in pulsed recordings)
         self.cutoff = cutoff
-        self.id_events = id_eventsDict
-        self.id_sessionStart = id_sessionStart
-        self.id_sessionEnd = id_sessionEnd
+
         #photometry data
         self.pt_raw = None
         self.pt_cleaned = None
         self.pt_binned = None
         self.pt_alignedEvents = {}
+        self.numChan = 1
+
         #Med-Pc Data
-        self.mpc_data = None
+        self.timestamp_data = None
+        #dictonary of ID ints for Med-Pc Events
+        self.id_events = id_eventsDict
+
         #normaliztion constant, which is functionally the slope from the caluclated linear regression
         self.normConst = 0
-        if type.upper() == "PULSED":
-            self.isPulsed = True
-        elif type.upper() == "CONTINUOUS":
-            self.isPulsed = False
-        else:
-            raise TypeError("Passed recording type is not recognized. Passed", type,
-                            "does not match either 'pulsed' or 'continuous'")
+
+        #type of recording
+        self.type = type
+
+        #recording hardware
+        self.recorderType = None
 
     #Helper function which takes a Med-Pc ID integer and returns a pandas dataframe with all of the timestamps for that ID
-    def getTimestampTimes(self, timestampID):
-        if self.mpc_data is not None:
-            tmp = self.mpc_data[self.mpc_data.ID == timestampID].secs
+    def getMPCTimes(self, timestampID):
+        if self.timestamp_data is not None:
+            tmp = self.timestamp_data[self.timestamp_data.ID == timestampID].secs
             return tmp.values
         else:
             raise UserWarning("Cannot retrieve timestamps from empty Med-pc dataframe. Does the original data include Med-Pc Data?")
 
     #work in progress
     def alignEvents(self):
-        if self.mpc_data is None:
+        if self.timestamp_data is None:
             raise UserWarning("Cannot align events to non-existent Med-Pc Data")
         else:
             trials = []
             try:
                 id_trialStart = self.id_events["id_trialStart"]
-                trials = self.getTimestampTimes(id_trialStart)
+                trials = self.getMPCTimes(id_trialStart)
             except:
                 raise TypeError("No Med-pc events for id_trialStart")
 
@@ -51,7 +54,7 @@ class PhotometryData:
     #uses cleaned data from pulsed recordings to create bins of each recording window
     #for each recording window, takes the mean of the signal.
     def binData(self):
-        if self.isPulsed is False:
+        if self.type.upper() == "PULSED":
             raise TypeError("Recording type is continuous. Cannot bin data for non-pulsed recordings")
         if self.pt_cleaned is None:
             raise UserWarning("This data has not been cleaned. Please run clean() before proceeding.")
@@ -84,12 +87,32 @@ class PhotometryData:
         if self.pt_raw is None:
             raise UserWarning("No photometry data has been added to this struct. Call readData(fpath) before proceeding")
         else:
-            self.pt_cleaned = self.pt_raw
-            mapping = {"Time(s)": "Time", "AIn-1 - Dem (AOut-1)": "_405", "AIn-1 - Dem (AOut-2)": "_465",
-                       "DI/O-3": "TTL_6", "DI/O-4": "TTL_8"}
-            self.pt_cleaned.rename(columns=mapping, inplace=True)
+            print("Cleaning Photometry data...")
 
-            if self.isPulsed is True:
+            #determine type of data (Doric or RWD system)
+            self.pt_cleaned = self.pt_raw
+            test = self.pt_raw.columns[0]
+
+            if test == "Time(s)":
+                print("Detected Doric style recording...")
+                #single channel only, so change all column names based on mapping
+                mapping = {"Time(s)": "Time", "AIn-1 - Dem (AOut-1)": "CH1-405", "AIn-1 - Dem (AOut-2)": "Ch2-465",
+                           "DI/O-3": "TTL_6", "DI/O-4": "TTL_8"}
+                self.pt_cleaned.rename(columns=mapping, inplace=True)
+                self.recorderType = 'doric'
+                self.numChan = 1
+
+            elif test == "Timestamp":
+                print("Detected RWD style recording...")
+                self.pt_cleaned.columns.values[0] = "Time"
+                self.recorderType = 'rwd'
+
+            if self.recorderType == 'rwd':
+                self.numChan = (self.pt_cleaned.shape[1] / 2) - 1
+                numAnimals = math.floor(self.numChan / 4)
+                print("Found", self.numChan, "channel(s) across", numAnimals, "animal(s)...")
+
+            if self.type.upper() == "PULSED":
                 #remove samples which are outside recording windows
                 self.pt_cleaned = self.pt_cleaned.drop(self.pt_cleaned[self.pt_cleaned.TTL_6 < 1].index)
                 #remove samples in which signal is close to 0
@@ -97,9 +120,9 @@ class PhotometryData:
                 self.pt_cleaned = self.pt_cleaned.drop(self.pt_cleaned[self.pt_cleaned._465 < self.cutoff].index)
 
                 #remove samples which are before or after session start and end times (if Med-Pc data as been loaded into data structure)
-                if self.mpc_data is not None:
-                    start = self.getTimestampTimes(self.id_sessionStart)
-                    end = self.getTimestampTimes(self.id_sessionEnd)
+                if self.timestamp_data is not None:
+                    start = self.getMPCTimes(self.id_events.get("id_sessionStart"))
+                    end = self.getMPCTimes(self.id_events.get("id_sessionEnd"))
                     if len(start) == 1:
                         start = start[0]
                     else:
@@ -146,16 +169,17 @@ class PhotometryData:
             self.cleaned = True
 
     #Normalizes cleaned photometry data
-    def normalize(self):
+    def normalize(self, numSamples = 20, useIntercept = False):
         if self.pt_cleaned is None:
             raise UserWarning("This data has not been cleaned. Please run clean() before proceeding.")
         else:
+            #update code to be on per-channel basis!
             #take first and last 20 samples, calculate x-intercept of line passing between the points
-            end = len(self.pt_raw._465)
-            y1 = self.pt_raw._465[0:20].mean()
-            y2 = self.pt_raw._465[end - 20:end].mean()
-            x1 = self.pt_raw._405[0:20].mean()
-            x2 = self.pt_raw._405[end - 20:end].mean()
+            end = len(self.pt_cleaned._465)
+            y1 = self.pt_cleaned._465[0:numSamples].mean()
+            y2 = self.pt_cleaned._465[end - numSamples:end].mean()
+            x1 = self.pt_cleaned._405[0:numSamples].mean()
+            x2 = self.pt_cleaned._405[end - numSamples:end].mean()
 
             intercept = x2 - (y2 * (x1 - x2)) / (y1 - y2)
             print("Slope of regression: ", intercept)
@@ -165,6 +189,9 @@ class PhotometryData:
             #add contribution of autofluorescence
             self.normConst = intercept
             intercept += self.autoFlProfile
+
+            if useIntercept == False:
+                intercept = 0
 
             self.pt_cleaned["norm"] = self.pt_cleaned._465 / (self.pt_cleaned._405 - intercept)
             print(self.pt_cleaned)
@@ -176,21 +203,14 @@ class PhotometryData:
         #look for photometry data
         try:
             #first sheet is always our photometry data
-            rawData = pd.read_excel(fpath, sheet_name=0, header=1, dtype=float)
+            rawData = pd.read_excel(fpath, sheet_name=0, header=1)
         except:
             raise RuntimeError("Could not read photometry data")
         #look for Med-Pc Data
         try:
-            timestampData = pd.read_excel(fpath, sheet_name="Med-Pc", header=0)
+            timestampData = pd.read_excel(fpath, sheet_name="Events", header=0)
         except:
-            print("Warning: Could not find Med-Pc data in file. Is there an excel tab labeled 'Med-Pc'?")
-
-        #look for DLC Data
-        try:
-            DLCData = pd.read_excel(fpath, sheet_name="DLC", header=0)
-        except:
-            print("Warning: Could not find DeepLabCut")
+            print("Warning: Could not find events data in file. Is there an excel tab labeled 'Events'?")
 
         self.pt_raw = rawData
-        self.mpc_data = timestampData
-        self.dlc_data = DLCData
+        self.timestamp_data = timestampData
