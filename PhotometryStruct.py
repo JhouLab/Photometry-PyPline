@@ -8,39 +8,39 @@ class PhotometryData:
         self.autoFlProfile = autoFlProfile
         #threshold value which we remove samples under (these are samples which the laser was not active for in pulsed recordings)
         self.cutoff = cutoff
+
         #photometry data
         self.pt_raw = None
         self.pt_cleaned = None
         self.pt_binned = None
         self.pt_alignedEvents = {}
         self.numChan = 1
+
         #Med-Pc Data
-        self.mpc_data = None
+        self.timestamp_data = None
         #dictonary of ID ints for Med-Pc Events
         self.id_events = id_eventsDict
+
         #normaliztion constant, which is functionally the slope from the caluclated linear regression
         self.normConst = 0
-        if type.upper() == "PULSED":
-            self.isPulsed = True
-        elif type.upper() == "CONTINUOUS":
-            self.isPulsed = False
-        else:
-            raise TypeError("Passed recording type is not recognized. Passed", type,
-                            "does not match either 'pulsed' or 'continuous'")
-        #either Doric or RWD systems
+
+        #type of recording
+        self.type = type
+
+        #recording hardware
         self.recorderType = None
 
     #Helper function which takes a Med-Pc ID integer and returns a pandas dataframe with all of the timestamps for that ID
     def getMPCTimes(self, timestampID):
-        if self.mpc_data is not None:
-            tmp = self.mpc_data[self.mpc_data.ID == timestampID].secs
+        if self.timestamp_data is not None:
+            tmp = self.timestamp_data[self.timestamp_data.ID == timestampID].secs
             return tmp.values
         else:
             raise UserWarning("Cannot retrieve timestamps from empty Med-pc dataframe. Does the original data include Med-Pc Data?")
 
     #work in progress
     def alignEvents(self):
-        if self.mpc_data is None:
+        if self.timestamp_data is None:
             raise UserWarning("Cannot align events to non-existent Med-Pc Data")
         else:
             trials = []
@@ -54,7 +54,7 @@ class PhotometryData:
     #uses cleaned data from pulsed recordings to create bins of each recording window
     #for each recording window, takes the mean of the signal.
     def binData(self):
-        if self.isPulsed is False:
+        if self.type.upper() == "PULSED":
             raise TypeError("Recording type is continuous. Cannot bin data for non-pulsed recordings")
         if self.pt_cleaned is None:
             raise UserWarning("This data has not been cleaned. Please run clean() before proceeding.")
@@ -112,7 +112,7 @@ class PhotometryData:
                 numAnimals = math.floor(self.numChan / 4)
                 print("Found", self.numChan, "channel(s) across", numAnimals, "animal(s)...")
 
-            if self.isPulsed is True:
+            if self.type.upper() == "PULSED":
                 #remove samples which are outside recording windows
                 self.pt_cleaned = self.pt_cleaned.drop(self.pt_cleaned[self.pt_cleaned.TTL_6 < 1].index)
                 #remove samples in which signal is close to 0
@@ -120,7 +120,7 @@ class PhotometryData:
                 self.pt_cleaned = self.pt_cleaned.drop(self.pt_cleaned[self.pt_cleaned._465 < self.cutoff].index)
 
                 #remove samples which are before or after session start and end times (if Med-Pc data as been loaded into data structure)
-                if self.mpc_data is not None:
+                if self.timestamp_data is not None:
                     start = self.getMPCTimes(self.id_events.get("id_sessionStart"))
                     end = self.getMPCTimes(self.id_events.get("id_sessionEnd"))
                     if len(start) == 1:
@@ -208,9 +208,9 @@ class PhotometryData:
             raise RuntimeError("Could not read photometry data")
         #look for Med-Pc Data
         try:
-            timestampData = pd.read_excel(fpath, sheet_name="Med-Pc", header=0)
+            timestampData = pd.read_excel(fpath, sheet_name="Events", header=0)
         except:
-            print("Warning: Could not find Med-Pc data in file. Is there an excel tab labeled 'Med-Pc'?")
+            print("Warning: Could not find events data in file. Is there an excel tab labeled 'Events'?")
 
         self.pt_raw = rawData
-        self.mpc_data = timestampData
+        self.timestamp_data = timestampData

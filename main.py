@@ -7,19 +7,25 @@ import BehaviorStruct
 import PhotometryStruct
 
 #dictionary of events in Med-Pc timestamp data
-pulsedEvents_openField = {"id_sessionStart": 1, "id_sessionEnd": 2, "id_recordingStart": 5, "id_recordingStop": 6}
-events_openField = {"id_sessionStart": 1, "id_sessionEnd": 2}
-DLCEvents = {"id_trialStart": 71, "id_cueAvers": 34, "id_cueAversHigh": 38, "id_cueNeutral": 36}
-ezTrackEVents = {"id_trialStart": 71, "id_cueAversHigh": 38, "id_cueNeutral": 36}
+events = {}
+#special events for pulsed recordings
+pulsed_events = {"id_recordingStart": 5, "id_recordingStop": 6}
+#normal paradigm events
+openField_events = {"id_sessionStart": 1, "id_sessionEnd": 2}
+fearConditioning_events = {"id_trialStart": 71, "id_cueAversive": 34}
+pavlov_events = {}
 
-def main():
+
+def main(events= events):
     root = tkinter.Tk()
     root.withdraw()
-    print("\n==Fiber Photometry Analysis for Pulsed Recordings==")
-    print("Note: Currently, this program only accepts Doric Neuroscience Studio v5 type .xlsx files\n")
-    channel1 = None
-    choice = None
+    print("\n== Fiber Photometry Analysis ==")
+    paradigm = None
+    behavior = None
     type = None
+    control = None
+
+    channel1 = None
     currdir = os.getcwd()
     #get path to .xlsx file
     fpath = filedialog.askopenfilename(parent=root, initialdir=currdir,
@@ -28,57 +34,156 @@ def main():
     print("You chose:", fpath, "\n")
 
     print("Select Recording Type (default = 1):")
-    print("1. Continuous")
-    print("2. Pulsed")
-    print("3. DeepLabCut Data Only")
-    print("4. EzTrack Data Only")
+    print("1. Continuous Fiber photometry")
+    print("2. Pulsed Fiber photometry")
+    print("3. Brainmata Recording without miniscope")
+    print("4. Behavior Only")
     while True:
         val = input("> ")
         if val == "1" or val == "":
-            type = "continuous"
+            type = "continuous (not supported)"
             break
         elif val == "2":
             type = "pulsed"
+            events.update(pulsed_events)
             break
         elif val == "3":
-            type = "DLC-only"
+            type = "brainmata"
             break
         elif val == "4":
-            type = "eztrack"
+            type = "behavior-only"
             break
         else:
             print("Incorrect input")
 
-    if type == "continuous" or type == "pulsed":
-        print("Select a paradigm to analyze (default = 1):")
-        print("1. Open Field")
-        print("2. Tonic Recording")
-        while True:
-            val = input("> ")
-            if val == "1":
-                choice = 1
-                break
-            if val == "2":
-                choice = 2
-                break
-            elif val == "":  #default option
-                choice = 1
-                break
+    print("Select a paradigm to analyze (default = 1):")
+    print("1. No task")
+    print("2. Tonic Recording")
+    print("3. Pavlovian Conditioning")
+    print("4. Fear Conditioning")
+    while True:
+        val = input("> ")
+        if val == "1":
+            paradigm = "none"
+            events.update(openField_events)
+            break
+        if val == "2":
+            paradigm = "tonic"
+            events.update(openField_events)
+            break
+        if val == "3":
+            paradigm = "pavlovian"
+            events.update(pavlov_events)
+            break
+        if val == "4":
+            paradigm = "fear"
+            events.update(fearConditioning_events)
+            break
+        elif val == "":  #default option
+            paradigm = "none"
+            break
+        else:
+            print("Incorrect input")
+
+    print("Select a behavioral recording type to analyze (default = 1):")
+    print("1. DeepLabCut")
+    print("2. ezTrack")
+    print("3. No Behavior")
+    while True:
+        val = input("> ")
+        if val == "1":
+            behavior = "deeplabcut"
+            break
+        if val == "2":
+            behavior = "eztrack"
+            break
+        if val == "3":
+            behavior = "none"
+            break
+        elif val == "":  #default option
+            behavior = "deeplabcut"
+            break
+        else:
+            print("Incorrect input")
+
+
+
+    ##########################################################
+    #### BRAINMATA BEHAVIORAL ANALYSIS  WITHOUT MINISCOPE ####
+    ##########################################################
+    if type == "brainmata" and behavior == "deeplabcut":
+        #override event dictionary since event dataframe indexing is different with brainmata recordings
+        if paradigm == "pavlovian":
+            events = {"id_trialStart": "TONE_timestamp", "id_cueReward": "Reward Cue_timestamp", "id_cueNeutral": "Neutral Cue_timestamp"}
+
+        # get path to video
+        vpath = filedialog.askopenfilename(parent=root, initialdir=currdir,
+                                           title='Please select a video file',
+                                           filetypes=[("Video File", "*.avi")])
+
+        print("Analyzing Brainmata recording against Deeplabcut behavior...")
+        beh_struct = BehaviorStruct.BehaviorData(type= behavior, id_eventsDict= events, videoPath= vpath)
+        beh_struct.readData(fpath)
+        beh_struct.clean()
+        beh_struct.booleanEvent(part="Tongue_x")
+        beh_struct.alignEvents(part="Tongue_x_bool", baseline=5, outcome=10)
+        beh_struct.annotatePerieventBehavior(window = [0, 3], isCorrect = True, eventName = "cueReward", part = "Tongue_predictive")
+        beh_struct.annotatePerieventBehavior(window=[3, 10], isCorrect=True, eventName="cueReward", part="Tongue_outcome")
+        beh_struct.annotatePerieventBehavior(window = [3, 10], isCorrect = False, eventName = "cueNeutral", part = "Tongue_outcome")
+        beh_struct.annotatePerieventBehavior(window=[0, 3], isCorrect=False, eventName="cueNeutral", part="Tongue_predictive")
+
+        name = fpath.split("/")
+        saveDir = ""
+        saveDir = "/".join(name[0:len(name) - 1])
+
+        # save data
+        print("Saving processed and aligned data in .xlsx format...")
+        # save all behavior data
+        dest = saveDir + "/" + "Behavior_All.xlsx"
+        writer = pd.ExcelWriter(dest, engine="xlsxwriter")
+        beh_struct.beh_data.to_excel(writer, sheet_name="Behavior_Data_Raw", index=True)
+        beh_struct.beh_cleaned.to_excel(writer, sheet_name="Behavior_Data_Processed", index=True)
+        beh_struct.beh_TTL.to_excel(writer, sheet_name="Behavior_TTl", index=False)
+
+        #process statistics dictionary
+        #separate out dataframes to be saved as separate excel tabs
+        stats = {}
+        for key, value in beh_struct.beh_stats.items():
+            if isinstance(value, pd.DataFrame):
+                value.to_excel(writer, sheet_name= key[0:31], index= False)
             else:
-                print("Incorrect input")
+                stats.update({key: value})
+
+        stats = pd.Series(stats, name="statistics")
+        stats.to_excel(writer, sheet_name="Statistics", index=True)
+
+        writer.close()
+        print("Finished")
+
+
+    #####################################
+    #### PULSED RECORDING PROCESSING ####
+    #####################################
+    if type == "pulsed":
+        channel1 = PhotometryStruct.PhotometryData(type= type, id_eventsDict= events)
+        channel1.readData(fpath)
+        channel1.clean()
+        #normalize and bin data
+        channel1.normalize()
+        channel1.binData()
 
 
     ##################################
     #### DLC DATA ONLY PROCESSING ####
     ##################################
-    if type == "DLC-only":
+    if type == "behavior-only" and behavior == "dlc":
         root.deiconify()
         # get path to video
         vpath = filedialog.askopenfilename(parent=root, initialdir=currdir,
                                            title='Please select a video file',
                                            filetypes=[("Video File", "*.avi")])
         root.withdraw()
-        channel1 = BehaviorStruct.BehaviorData(id_eventsDict= DLCEvents, videoPath = vpath)
+        channel1 = BehaviorStruct.BehaviorData(id_eventsDict= events, videoPath = vpath)
         channel1.readData(fpath)
         channel1.clean()
         channel1.alignEvents(part= 'Back1_Vel', baseline= 10, outcome= 10)
@@ -125,10 +230,10 @@ def main():
         #show plots
         plt.show()
 
-    ##################
-    ##### ezTrack ####
-    ##################
-    if type == "eztrack":
+    #######################
+    ##### EZTRACK ONLY ####
+    #######################
+    if type == "behavior-only" and behavior == "eztrack":
         print("Processing ezTrack freezing behavioral data...")
         root.deiconify()
         # get path to video
@@ -136,7 +241,7 @@ def main():
                                            title='Please select a video file',
                                            filetypes=[("Video File", "*.avi")])
         root.withdraw()
-        channel1 = BehaviorStruct.BehaviorData(id_eventsDict=ezTrackEVents, videoPath=vpath)
+        channel1 = BehaviorStruct.BehaviorData(id_eventsDict= events, videoPath=vpath)
         channel1.readData(fpath)
         channel1.clean()
         print(channel1.beh_cleaned)
@@ -192,32 +297,11 @@ def main():
 
         plt.show()
 
-    #####################################
-    #### PULSED RECORDING PROCESSING ####
-    #####################################
-    if type == "pulsed" and choice == 1 and type != "DLC-only":
-        channel1 = PhotometryStruct.PhotometryData(type= type, id_eventsDict=pulsedEvents_openField)
-        channel1.readData(fpath)
-        channel1.clean()
-
-        #normalize and bin data
-        channel1.normalize()
-        if type == "pulsed":
-            channel1.binData()
-
-    #####################################
-    #### Continuous Tonic Recording ####
-    #####################################
-    if type == "continuous" and choice == 2 and type != "DLC-only":
-        print("Processing continuous tonic recording...")
-        channel1 = PhotometryStruct.PhotometryData(type= type, id_eventsDict= events_openField)
-        channel1.readData(fpath)
-        channel1.clean()
 
     #############################################
     #### GRAPHING AND SAVING PHOTOMETRY DATA ####
     #############################################
-    if channel1 != None and type != "DLC-only" and type != "eztrack":
+    if type != "behavior-only" and type != "eztrack":
         #plot results
         fig, axes = plt.subplots(2,2)
         channel1.pt_cleaned.plot(ax= axes[0,0], x="Time", y=["_465", "_405"], kind="line", figsize=(10, 5))

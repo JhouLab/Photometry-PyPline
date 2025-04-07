@@ -5,3 +5,7 @@
 .idea/modules.xml
 *.png
 *.xlsx
+__pycache__/BehaviorStruct.cpython-311.pyc
+__pycache__/PhotometryStruct.cpython-311.pyc
+__pycache__/BehaviorStruct.cpython-311.pyc
+__pycache__/PhotometryStruct.cpython-311.pyc
