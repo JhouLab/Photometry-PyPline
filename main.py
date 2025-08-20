@@ -136,6 +136,14 @@ def main(events= events):
         saveDir = ""
         saveDir = "/".join(name[0:len(name) - 1])
 
+        for key, value in beh_struct.beh_alignedEvents.items():
+            plot = beh_struct.beh_alignedEvents[key].plot(x="Time", y="Average", kind="line", figsize=(10, 5))
+            plot.set_title(key)
+            figPath = saveDir + "/" + key + "_DLC.png"
+            plt.savefig(figPath)
+
+        plt.show()
+
         # save data
         print("Saving processed and aligned data in .xlsx format...")
         # save all behavior data
