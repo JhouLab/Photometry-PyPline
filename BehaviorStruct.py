@@ -66,10 +66,10 @@ class BehaviorData:
         df['SD'] = df.std(axis=1, skipna=True)
         #take row average
         df['Average'] = df.mean(axis=1, skipna=True)
-        #mov = np.convolve(df['Average'], np.ones(10), 'valid') / 10
+        mov = np.convolve(df['Average'], np.ones(10), 'valid') / 10
         # first 5 and last 5 samples cannot be calculated, so pad array so that dimensions fit with existing data
-        #mov = np.concatenate([[np.nan, np.nan, np.nan, np.nan, np.nan], mov, [np.nan, np.nan, np.nan, np.nan]])
-        #df['Average'] = mov
+        mov = np.concatenate([[np.nan, np.nan, np.nan, np.nan, np.nan], mov, [np.nan, np.nan, np.nan, np.nan]])
+        df['Average'] = mov
         #reindex dataframe so times are event centric
         time = np.linspace(0 - baseline, 0 + outcome, df.shape[0])
         df['Time'] = time
@@ -286,6 +286,7 @@ class BehaviorData:
                 self.control_type = "medpc"
             else:
                 print("Warning: event data is not a recognized format")
+
 
     def readData(self, fpath):
         print("Reading data...")
